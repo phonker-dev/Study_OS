@@ -101,7 +101,7 @@ input, select, textarea{
 #desktop{
   position: relative;
   width: 100vw; height: 100vh;
-  background-image: url("PNG/background.jpg");
+  background-image: url("PNG/Background.jpg");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
