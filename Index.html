@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Study OS</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Загрузочный экран -->
+<div id="boot-screen">
+  <div class="boot-inner">
+    <div class="boot-logo">Study OS<span>XP</span></div>
+    <div class="boot-bar"><div class="boot-bar-fill"></div></div>
+    <div class="boot-caption">by phonker-dev</div>
+  </div>
+</div>
+
+<!-- Экран завершения работы -->
+<div id="shutdown-screen" class="hidden">
+  <div class="shutdown-inner">
+    <div class="shutdown-title">Windows завершает работу</div>
+  </div>
+</div>
+
+<!-- Рабочий стол -->
+<div id="desktop">
+
+  <!-- Иконки рабочего стола -->
+  <div id="desktop-icons">
+    <button class="desktop-icon" data-app="schedule">
+      <img src="PNG/Raspisanie.png" alt="">
+      <span>Расписание</span>
+    </button>
+    <button class="desktop-icon" data-app="notes">
+      <img src="PNG/Conspect.png" alt="">
+      <span>Конспекты</span>
+    </button>
+    <button class="desktop-icon" data-app="weather">
+      <img src="PNG/Weather.png" alt="">
+      <span>Погода и пробки</span>
+    </button>
+    <button class="desktop-icon" data-app="settings">
+      <img src="PNG/Settings.png" alt="">
+      <span>Панель управления</span>
+    </button>
+  </div>
+
+  <!-- Виджет расписания на сегодня -->
+  <div id="schedule-widget" class="glass-widget">
+    <div class="widget-header">
+      <button id="widget-prev" class="widget-nav" title="Предыдущий день">&#10094;</button>
+      <div class="widget-date">
+        <div id="widget-day-name">Понедельник</div>
+        <div id="widget-date-full">01 января</div>
+      </div>
+      <button id="widget-next" class="widget-nav" title="Следующий день">&#10095;</button>
+    </div>
+    <div class="widget-parity">
+      <span id="widget-parity-label">Четная неделя</span>
+      <span id="widget-today-badge" class="today-badge hidden">Сегодня</span>
+    </div>
+    <div id="widget-lessons" class="widget-lessons">
+      <!-- заполняется в JS -->
+    </div>
+    <button id="widget-edit-btn" class="xp-button widget-edit-btn">Редактировать расписание</button>
+  </div>
+
+  <!-- Окно: Расписание -->
+  <div class="xp-window hidden" id="window-schedule" data-app="schedule">
+    <div class="xp-titlebar">
+      <div class="xp-titlebar-left">
+        <img src="PNG/Raspisanie.png" class="xp-title-icon" alt="">
+        <span class="xp-title-text">Расписание.exe</span>
+      </div>
+      <div class="xp-titlebar-buttons">
+        <button class="xp-btn-min" title="Свернуть">_</button>
+        <button class="xp-btn-max" title="Развернуть">&#9633;</button>
+        <button class="xp-btn-close" title="Закрыть">&#10005;</button>
+      </div>
+    </div>
+    <div class="xp-toolbar">
+      <button class="xp-tool-btn" id="sched-add-lesson">+ Добавить пару</button>
+      <button class="xp-tool-btn" id="sched-export">Экспортировать JSON</button>
+      <button class="xp-tool-btn" id="sched-import">Импортировать JSON</button>
+      <input type="file" id="sched-import-input" accept="application/json" class="hidden">
+      <div class="xp-tool-tabs">
+        <button class="xp-tab active" data-parity="even">Четная</button>
+        <button class="xp-tab" data-parity="odd">Нечетная</button>
+      </div>
+    </div>
+    <div class="xp-window-body" id="schedule-body">
+      <div class="schedule-days" id="schedule-days">
+        <!-- дни недели с карточками пар, заполняется в JS -->
+      </div>
+    </div>
+    <div class="resize-handle rh-n"></div>
+    <div class="resize-handle rh-s"></div>
+    <div class="resize-handle rh-e"></div>
+    <div class="resize-handle rh-w"></div>
+    <div class="resize-handle rh-ne"></div>
+    <div class="resize-handle rh-nw"></div>
+    <div class="resize-handle rh-se"></div>
+    <div class="resize-handle rh-sw"></div>
+  </div>
+
+  <!-- Окно: Редактор пары (форма добавления/редактирования) -->
+  <div class="xp-window hidden" id="window-lesson-form" data-app="lesson-form">
+    <div class="xp-titlebar">
+      <div class="xp-titlebar-left">
+        <img src="PNG/Raspisanie.png" class="xp-title-icon" alt="">
+        <span class="xp-title-text" id="lesson-form-title">Новая пара</span>
+      </div>
+      <div class="xp-titlebar-buttons">
+        <button class="xp-btn-close" title="Закрыть">&#10005;</button>
+      </div>
+    </div>
+    <div class="xp-window-body">
+      <form id="lesson-form" class="xp-form">
+        <input type="hidden" id="lf-id">
+        <input type="hidden" id="lf-parity">
+        <input type="hidden" id="lf-day">
+        <label>Начало
+          <input type="time" id="lf-start" required>
+        </label>
+        <label>Окончание
+          <input type="time" id="lf-end" required>
+        </label>
+        <label>Тип занятия
+          <select id="lf-type">
+            <option value="lecture">Лекция</option>
+            <option value="seminar">Семинар</option>
+          </select>
+        </label>
+        <label>Дисциплина
+          <input type="text" id="lf-subject" required>
+        </label>
+        <label>Аудитория
+          <input type="text" id="lf-room">
+        </label>
+        <label>Преподаватель
+          <input type="text" id="lf-teacher">
+        </label>
+        <div class="xp-form-actions">
+          <button type="submit" class="xp-button primary">Сохранить</button>
+          <button type="button" class="xp-button" id="lf-cancel">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Окно: Конспекты -->
+  <div class="xp-window hidden" id="window-notes" data-app="notes">
+    <div class="xp-titlebar">
+      <div class="xp-titlebar-left">
+        <img src="PNG/Conspect.png" class="xp-title-icon" alt="">
+        <span class="xp-title-text">Конспекты.exe</span>
+      </div>
+      <div class="xp-titlebar-buttons">
+        <button class="xp-btn-min" title="Свернуть">_</button>
+        <button class="xp-btn-max" title="Развернуть">&#9633;</button>
+        <button class="xp-btn-close" title="Закрыть">&#10005;</button>
+      </div>
+    </div>
+    <div class="xp-window-body notes-body">
+      <div class="notes-sidebar">
+        <button class="xp-tool-btn full" id="notes-new">+ Новый конспект</button>
+        <button class="xp-tool-btn full" id="notes-import">Импортировать .md</button>
+        <input type="file" id="notes-import-input" accept=".md,text/markdown" class="hidden">
+        <div class="notes-list" id="notes-list"></div>
+      </div>
+      <div class="notes-main">
+        <div class="notes-main-toolbar">
+          <input type="text" id="notes-title-input" placeholder="Название конспекта" class="notes-title-input">
+          <button class="xp-tool-btn" id="notes-export">Экспорт .md</button>
+          <button class="xp-tool-btn danger" id="notes-delete">Удалить</button>
+        </div>
+        <div class="notes-panes">
+          <textarea id="notes-editor" placeholder="Начните печатать в формате Markdown…"></textarea>
+          <div id="notes-preview" class="notes-preview"></div>
+        </div>
+      </div>
+    </div>
+    <div class="resize-handle rh-n"></div>
+    <div class="resize-handle rh-s"></div>
+    <div class="resize-handle rh-e"></div>
+    <div class="resize-handle rh-w"></div>
+    <div class="resize-handle rh-ne"></div>
+    <div class="resize-handle rh-nw"></div>
+    <div class="resize-handle rh-se"></div>
+    <div class="resize-handle rh-sw"></div>
+  </div>
+
+  <!-- Окно: Погода и пробки -->
+  <div class="xp-window hidden" id="window-weather" data-app="weather">
+    <div class="xp-titlebar">
+      <div class="xp-titlebar-left">
+        <img src="PNG/Weather.png" class="xp-title-icon" alt="">
+        <span class="xp-title-text">Погода и пробки.exe</span>
+      </div>
+      <div class="xp-titlebar-buttons">
+        <button class="xp-btn-min" title="Свернуть">_</button>
+        <button class="xp-btn-max" title="Развернуть">&#9633;</button>
+        <button class="xp-btn-close" title="Закрыть">&#10005;</button>
+      </div>
+    </div>
+    <div class="xp-window-body">
+      <div class="weather-panels">
+        <div class="xp-groupbox">
+          <div class="xp-groupbox-title">Погода — <span id="weather-city-label">—</span></div>
+          <div id="weather-detail" class="weather-detail">
+            <div class="weather-loading">Загрузка данных о погоде…</div>
+          </div>
+          <button class="xp-tool-btn" id="weather-refresh">Обновить погоду</button>
+        </div>
+        <div class="xp-groupbox">
+          <div class="xp-groupbox-title">Дорога: Дом → Учеба</div>
+          <div id="traffic-detail" class="weather-detail">
+            <div class="weather-loading">Введите API-ключ TomTom в настройках…</div>
+          </div>
+          <button class="xp-tool-btn" id="traffic-refresh">Обновить пробки</button>
+        </div>
+      </div>
+    </div>
+    <div class="resize-handle rh-n"></div>
+    <div class="resize-handle rh-s"></div>
+    <div class="resize-handle rh-e"></div>
+    <div class="resize-handle rh-w"></div>
+    <div class="resize-handle rh-ne"></div>
+    <div class="resize-handle rh-nw"></div>
+    <div class="resize-handle rh-se"></div>
+    <div class="resize-handle rh-sw"></div>
+  </div>
+
+  <!-- Окно: Панель управления / Настройки -->
+  <div class="xp-window hidden" id="window-settings" data-app="settings">
+    <div class="xp-titlebar">
+      <div class="xp-titlebar-left">
+        <img src="PNG/Settings.png" class="xp-title-icon" alt="">
+        <span class="xp-title-text">Свойства системы</span>
+      </div>
+      <div class="xp-titlebar-buttons">
+        <button class="xp-btn-min" title="Свернуть">_</button>
+        <button class="xp-btn-max" title="Развернуть">&#9633;</button>
+        <button class="xp-btn-close" title="Закрыть">&#10005;</button>
+      </div>
+    </div>
+    <div class="xp-window-body">
+      <form id="settings-form" class="xp-form">
+        <div class="xp-groupbox">
+          <div class="xp-groupbox-title">Погода</div>
+          <label>Город
+            <input type="text" id="set-city" placeholder="Иркутск">
+          </label>
+        </div>
+        <div class="xp-groupbox">
+          <div class="xp-groupbox-title">Адрес «Дом»</div>
+          <label>Адрес
+            <input type="text" id="set-home-address" placeholder="Иркутск, ул. Ленина, 5">
+          </label>
+          <div class="xp-address-actions">
+            <button type="button" class="xp-tool-btn" id="home-find-btn">Найти по адресу</button>
+            <button type="button" class="xp-tool-btn" id="home-gps-btn">Определить автоматически</button>
+          </div>
+          <div class="settings-resolved" id="home-resolved"></div>
+        </div>
+        <div class="xp-groupbox">
+          <div class="xp-groupbox-title">Адрес «Учеба»</div>
+          <label>Адрес
+            <input type="text" id="set-study-address" placeholder="Иркутск, ул. Лермонтова, 110">
+          </label>
+          <div class="xp-address-actions">
+            <button type="button" class="xp-tool-btn" id="study-find-btn">Найти по адресу</button>
+            <button type="button" class="xp-tool-btn" id="study-gps-btn">Определить автоматически</button>
+          </div>
+          <div class="settings-resolved" id="study-resolved"></div>
+        </div>
+        <div class="xp-form-actions">
+          <button type="submit" class="xp-button primary">Применить</button>
+          <button type="button" class="xp-button" id="settings-cancel">Отмена</button>
+        </div>
+      </form>
+    </div>
+    <div class="resize-handle rh-n"></div>
+    <div class="resize-handle rh-s"></div>
+    <div class="resize-handle rh-e"></div>
+    <div class="resize-handle rh-w"></div>
+    <div class="resize-handle rh-ne"></div>
+    <div class="resize-handle rh-nw"></div>
+    <div class="resize-handle rh-se"></div>
+    <div class="resize-handle rh-sw"></div>
+  </div>
+
+  <!-- Модальное окно подтверждения удаления -->
+  <div class="xp-modal-overlay hidden" id="delete-modal-overlay">
+    <div class="xp-window xp-modal" id="delete-modal">
+      <div class="xp-titlebar">
+        <div class="xp-titlebar-left">
+          <span class="xp-title-text">Подтверждение</span>
+        </div>
+        <div class="xp-titlebar-buttons">
+          <button class="xp-btn-close" id="delete-modal-x" title="Закрыть">&#10005;</button>
+        </div>
+      </div>
+      <div class="xp-window-body xp-modal-body">
+        <div class="xp-modal-icon">?</div>
+        <div class="xp-modal-text" id="delete-modal-text">Удалить этот конспект без возможности восстановления?</div>
+      </div>
+      <div class="xp-modal-actions">
+        <button class="xp-button" id="delete-modal-yes">Да</button>
+        <button class="xp-button" id="delete-modal-no">Нет</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Меню Пуск -->
+  <div id="start-menu" class="hidden">
+    <div class="start-menu-header">
+      <div class="start-menu-avatar">СТ</div>
+      <div class="start-menu-username">Студент-юрист</div>
+    </div>
+    <div class="start-menu-columns">
+      <div class="start-menu-col-left">
+        <button class="start-menu-item" data-app="schedule">
+          <img src="PNG/Raspisanie.png" alt="">
+          <div><div class="sm-title">Расписание</div><div class="sm-sub">Пары и аудитории</div></div>
+        </button>
+        <button class="start-menu-item" data-app="notes">
+          <img src="PNG/Conspect.png" alt="">
+          <div><div class="sm-title">Конспекты</div><div class="sm-sub">Заметки в Markdown</div></div>
+        </button>
+        <button class="start-menu-item" data-app="weather">
+          <img src="PNG/Weather.png" alt="">
+          <div><div class="sm-title">Погода и пробки</div><div class="sm-sub">Дом → Учеба</div></div>
+        </button>
+      </div>
+      <div class="start-menu-col-right">
+        <button class="start-menu-item-right" data-app="settings">
+          <img src="PNG/Settings.png" alt="">
+          <span>Панель управления</span>
+        </button>
+      </div>
+    </div>
+    <div class="start-menu-footer">
+      <button id="shutdown-btn" class="start-menu-shutdown">
+        <span class="shutdown-icon">&#9211;</span> Завершение работы
+      </button>
+    </div>
+  </div>
+
+  <!-- Плашка в стиле "Активация Windows" — впишите свои данные ниже -->
+  <div id="activation-watermark">
+    <div>Активация Windows</div>
+    <div>Разработано: <a href="https://github.com/phonker-dev" target="_blank" rel="noopener">Phonker_Maloletni</a></div>
+    <div>Telegram: <a href="https://t.me/bananas_ananass" target="_blank" rel="noopener">@bananas_ananass</a></div>
+  </div>
+
+  <!-- Панель задач -->
+  <div id="taskbar">
+    <button id="start-button">
+      <span class="start-flag">&#10031;</span> Пуск
+    </button>
+    <div id="taskbar-apps"></div>
+    <div id="system-tray">
+      <div id="tray-weather" title="Погода">
+        <span id="tray-weather-temp">--°C</span>
+      </div>
+      <div id="tray-clock">00:00</div>
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

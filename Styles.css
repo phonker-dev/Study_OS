@@ -1,0 +1,577 @@
+/* =========================================================
+   raspisanie XP — Windows XP Luna Blue студенческий рабочий стол
+   Масштаб интерфейса увеличен в 1.5 раза относительно базового (16px -> 24px)
+   ========================================================= */
+
+:root{
+  --xp-blue-dark:   #0a246a;
+  --xp-blue-mid:    #1863e6;
+  --xp-blue-light:  #3a93ff;
+  --xp-blue-glow:   #a6d2ff;
+  --xp-titlebar-grad-a: #0058ee;
+  --xp-titlebar-grad-b: #2586ff;
+  --xp-titlebar-grad-c: #3d94ff;
+  --xp-titlebar-grad-d: #0053e6;
+  --xp-window-bg:   #ece9d8;
+  --xp-window-border: #0831d9;
+  --xp-taskbar-grad-a: #1a5cd7;
+  --xp-taskbar-grad-b: #1147b8;
+  --xp-taskbar-top:   #4d94ff;
+  --xp-green-btn-a: #3fa64a;
+  --xp-green-btn-b: #2d7d38;
+  --xp-close-a: #ff8a75;
+  --xp-close-b: #de4f3f;
+  --xp-close-c: #b52d20;
+  --xp-lecture: #2f6fce;
+  --xp-lecture-bg: #dce9ff;
+  --xp-seminar: #2f9e52;
+  --xp-seminar-bg: #ddf3e2;
+  --xp-text: #14243f;
+  --xp-font: "Tahoma", "Segoe UI", "Verdana", sans-serif;
+  --scale: 1.5;
+}
+
+*{ box-sizing: border-box; }
+
+html{
+  font-size: calc(16px * var(--scale)); /* 24px base -> весь rem-масштаб увеличен в 1.5 раза */
+}
+
+body{
+  margin: 0;
+  font-family: var(--xp-font);
+  color: var(--xp-text);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.hidden{ display: none !important; }
+
+button{
+  font-family: var(--xp-font);
+  cursor: pointer;
+}
+
+input, select, textarea{
+  font-family: var(--xp-font);
+  font-size: 0.7rem;
+}
+
+/* ---------- Загрузочный экран ---------- */
+#boot-screen{
+  position: fixed; inset: 0; z-index: 9999;
+  background: #000;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity .6s ease;
+}
+#boot-screen.fade-out{ opacity: 0; pointer-events: none; }
+.boot-inner{ text-align: center; color: #fff; }
+.boot-logo{
+  font-size: 2.4rem; font-weight: 700; letter-spacing: .05em;
+  margin-bottom: 1.2rem;
+}
+.boot-logo span{ color: var(--xp-blue-light); }
+.boot-bar{
+  width: 14rem; height: .35rem; background: #222; border-radius: .2rem;
+  overflow: hidden; margin: 0 auto;
+}
+.boot-bar-fill{
+  width: 40%; height: 100%;
+  background: linear-gradient(90deg, var(--xp-blue-mid), var(--xp-blue-glow));
+  animation: bootslide 1.1s ease-in-out infinite;
+}
+@keyframes bootslide{
+  0%{ transform: translateX(-100%); }
+  100%{ transform: translateX(350%); }
+}
+.boot-caption{ margin-top: .8rem; font-size: .55rem; color: #9db8d8; }
+
+/* ---------- Экран завершения работы ---------- */
+#shutdown-screen{
+  position: fixed; inset: 0; z-index: 9999;
+  background: #0a246a;
+  display: flex; align-items: center; justify-content: center;
+}
+.shutdown-title{ color: #fff; font-size: 1.4rem; }
+
+/* ---------- Рабочий стол ---------- */
+#desktop{
+  position: relative;
+  width: 100vw; height: 100vh;
+  background-image: url("PNG/Background.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #1a5cd7; /* запасной цвет, пока обои не загружены */
+  overflow: hidden;
+}
+
+/* ---------- Иконки рабочего стола ---------- */
+#desktop-icons{
+  position: absolute; top: .8rem; left: .8rem;
+  display: flex; flex-direction: column; gap: .3rem;
+  z-index: 10;
+}
+.desktop-icon{
+  background: transparent; border: 1px solid transparent;
+  width: 5rem; padding: .35rem .2rem;
+  display: flex; flex-direction: column; align-items: center; gap: .25rem;
+  border-radius: .2rem;
+}
+.desktop-icon img{ width: 2.4rem; height: 2.4rem; object-fit: contain; filter: drop-shadow(0 .1rem .1rem rgba(0,0,0,.5)); }
+.desktop-icon span{
+  color: #fff; font-size: .58rem; text-align: center; line-height: 1.15;
+  text-shadow: 0 1px 2px rgba(0,0,0,.9);
+}
+.desktop-icon:hover{ background: rgba(60,110,220,.35); border: 1px dotted rgba(255,255,255,.5); }
+.desktop-icon:active{ background: rgba(60,110,220,.6); }
+
+/* ---------- Стеклянный виджет расписания ---------- */
+.glass-widget{
+  position: absolute; top: .9rem; right: .9rem; width: 15rem;
+  background: rgba(20, 40, 80, .38);
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: .5rem;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: 0 .4rem 1rem rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.4);
+  padding: .6rem .7rem .7rem;
+  color: #fff;
+  z-index: 20;
+}
+.widget-header{
+  display: flex; align-items: center; justify-content: space-between;
+}
+.widget-nav{
+  background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.5);
+  color: #fff; border-radius: .25rem; width: 1.4rem; height: 1.4rem;
+  font-size: .6rem; line-height: 1;
+}
+.widget-nav:hover{ background: rgba(255,255,255,.35); }
+.widget-nav:active{ background: rgba(255,255,255,.5); }
+.widget-date{ text-align: center; }
+#widget-day-name{ font-size: .75rem; font-weight: 700; }
+#widget-date-full{ font-size: .55rem; opacity: .85; }
+.widget-parity{
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: .5rem; margin: .35rem 0 .45rem;
+  border-top: 1px solid rgba(255,255,255,.3);
+  border-bottom: 1px solid rgba(255,255,255,.3);
+  padding: .25rem 0;
+  opacity: .95;
+}
+.today-badge{
+  background: var(--xp-green-btn-a); color: #fff; padding: .05rem .35rem;
+  border-radius: .6rem; font-size: .46rem;
+}
+.widget-lessons{
+  display: flex; flex-direction: column; gap: .3rem;
+  max-height: 15rem; overflow-y: auto;
+}
+.widget-lessons::-webkit-scrollbar{ width: .4rem; }
+.widget-lessons::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.4); border-radius: .2rem; }
+.widget-lesson{
+  background: rgba(255,255,255,.14);
+  border-left: .22rem solid var(--xp-lecture);
+  border-radius: .2rem;
+  padding: .3rem .4rem;
+}
+.widget-lesson.type-seminar{ border-left-color: var(--xp-seminar); }
+.widget-lesson-time{ font-size: .52rem; font-weight: 700; opacity: .9; }
+.widget-lesson-subject{ font-size: .6rem; font-weight: 600; margin: .05rem 0; }
+.widget-lesson-meta{ font-size: .48rem; opacity: .85; }
+.widget-empty{ font-size: .55rem; opacity: .8; text-align: center; padding: .6rem 0; }
+.widget-edit-btn{ width: 100%; margin-top: .5rem; }
+
+/* ---------- XP кнопка (общая) ---------- */
+.xp-button{
+  font-size: .62rem;
+  padding: .28rem .9rem;
+  border-radius: .25rem;
+  border: 1px solid #6b8fc7;
+  background: linear-gradient(180deg, #fdfdfd 0%, #e6e6e6 45%, #d3d3d3 50%, #f2f2f2 100%);
+  color: var(--xp-text);
+  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset;
+}
+.xp-button:hover{ background: linear-gradient(180deg, #fff 0%, #dfeeff 50%, #bfe0ff 100%); border-color: #3a93ff; }
+.xp-button:active{ background: linear-gradient(180deg, #cfe6ff, #a9d2ff); }
+.xp-button.primary{
+  background: linear-gradient(180deg, #7fbd6b, var(--xp-green-btn-a) 50%, var(--xp-green-btn-b) 100%);
+  color: #fff; border-color: #2a5f30;
+}
+.xp-button.primary:hover{ filter: brightness(1.08); }
+
+/* ---------- Окна XP ---------- */
+.xp-window{
+  position: absolute;
+  top: 3rem; left: 6rem;
+  width: 34rem; min-width: 16rem; height: 26rem; min-height: 10rem;
+  background: var(--xp-window-bg);
+  border: 1px solid var(--xp-window-border);
+  border-radius: .45rem .45rem .2rem .2rem;
+  box-shadow: 0 .5rem 1.4rem rgba(0,0,0,.45);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  z-index: 100;
+}
+.xp-window.maximized{
+  top: 0 !important; left: 0 !important;
+  width: 100vw !important; height: calc(100vh - 2.6rem) !important;
+  border-radius: 0;
+}
+
+.xp-titlebar{
+  background: linear-gradient(180deg, var(--xp-titlebar-grad-b) 0%, var(--xp-titlebar-grad-a) 8%, var(--xp-titlebar-grad-c) 50%, var(--xp-titlebar-grad-d) 92%, var(--xp-titlebar-grad-a) 100%);
+  color: #fff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .22rem .3rem .22rem .45rem;
+  height: 1.85rem;
+  cursor: move;
+  border-bottom: 1px solid #002a9e;
+  flex-shrink: 0;
+}
+.xp-titlebar-left{ display: flex; align-items: center; gap: .35rem; overflow: hidden; }
+.xp-title-icon{ width: 1.1rem; height: 1.1rem; object-fit: contain; }
+.xp-title-text{
+  font-size: .68rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 1px 1px rgba(0,0,0,.4);
+}
+.xp-titlebar-buttons{ display: flex; gap: .18rem; }
+.xp-titlebar-buttons button{
+  width: 1.15rem; height: 1.05rem; border-radius: .18rem;
+  border: 1px solid rgba(255,255,255,.5);
+  font-size: .55rem; line-height: 1; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #4f9dff, #1663d8);
+  color: #fff;
+}
+.xp-btn-close{
+  background: linear-gradient(180deg, var(--xp-close-a), var(--xp-close-b) 55%, var(--xp-close-c)) !important;
+}
+.xp-titlebar-buttons button:hover{ filter: brightness(1.2); }
+.xp-titlebar-buttons button:active{ filter: brightness(.9); }
+
+.xp-toolbar{
+  background: #eef2fb;
+  border-bottom: 1px solid #c8d3e8;
+  display: flex; align-items: center; gap: .3rem; flex-wrap: wrap;
+  padding: .3rem .4rem;
+  flex-shrink: 0;
+}
+.xp-tool-btn{
+  font-size: .58rem; padding: .25rem .55rem; border-radius: .25rem;
+  border: 1px solid #a9bfe0; background: linear-gradient(180deg, #fff, #dde8fb);
+}
+.xp-tool-btn:hover{ background: linear-gradient(180deg, #fff, #c6dcff); }
+.xp-tool-btn.full{ width: 100%; }
+.xp-tool-btn.danger{ border-color: #d68b83; background: linear-gradient(180deg, #fff, #ffe0dd); color: #8a2418; }
+.xp-tool-tabs{ margin-left: auto; display: flex; gap: .2rem; }
+.xp-tab{
+  font-size: .56rem; padding: .25rem .6rem; border-radius: .8rem;
+  border: 1px solid #a9bfe0; background: #fff; color: var(--xp-text);
+}
+.xp-tab.active{ background: var(--xp-blue-mid); color: #fff; border-color: var(--xp-blue-dark); }
+
+.xp-window-body{
+  flex: 1; overflow: auto; padding: .6rem;
+  background: #f6f8fc;
+}
+.xp-statusbar{
+  border-top: 1px solid #c8d3e8; background: #eef2fb; color: #5a6b8c;
+  font-size: .5rem; padding: .2rem .5rem; flex-shrink: 0;
+}
+
+/* Ручки изменения размера окна */
+.resize-handle{ position: absolute; z-index: 5; }
+.rh-n{ top: 0; left: .5rem; right: .5rem; height: .3rem; cursor: n-resize; }
+.rh-s{ bottom: 0; left: .5rem; right: .5rem; height: .3rem; cursor: s-resize; }
+.rh-e{ right: 0; top: .5rem; bottom: .5rem; width: .3rem; cursor: e-resize; }
+.rh-w{ left: 0; top: .5rem; bottom: .5rem; width: .3rem; cursor: w-resize; }
+.rh-ne{ top: 0; right: 0; width: .6rem; height: .6rem; cursor: ne-resize; }
+.rh-nw{ top: 0; left: 0; width: .6rem; height: .6rem; cursor: nw-resize; }
+.rh-se{ bottom: 0; right: 0; width: .6rem; height: .6rem; cursor: se-resize; }
+.rh-sw{ bottom: 0; left: 0; width: .6rem; height: .6rem; cursor: sw-resize; }
+
+/* ---------- Дни недели в окне расписания ---------- */
+.schedule-days{
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+  gap: .6rem;
+}
+.schedule-day-col{
+  background: #fff; border: 1px solid #ccd7ec; border-radius: .3rem;
+  padding: .4rem; display: flex; flex-direction: column; gap: .35rem;
+}
+.schedule-day-col.is-today{ border-color: var(--xp-blue-mid); box-shadow: 0 0 0 2px rgba(58,147,255,.25); }
+.schedule-day-title{
+  font-size: .62rem; font-weight: 700; color: var(--xp-blue-dark);
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid #dde5f5; padding-bottom: .25rem;
+}
+.day-add-btn{
+  border: none; background: #e3ecfb; color: var(--xp-blue-mid); border-radius: .2rem;
+  width: 1.1rem; height: 1.1rem; font-size: .62rem; line-height: 1;
+}
+.day-add-btn:hover{ background: #cfe1ff; }
+.lesson-card{
+  border: 1px solid #dbe3f2; border-radius: .25rem; padding: .35rem .4rem;
+  background: #fbfcff;
+  position: relative;
+}
+.lesson-card .lc-time{ font-size: .5rem; font-weight: 700; color: #48597a; }
+.lesson-card .lc-badge{
+  display: inline-block; font-size: .44rem; font-weight: 700; text-transform: uppercase;
+  padding: .06rem .3rem; border-radius: .6rem; margin-left: .3rem;
+  background: var(--xp-lecture-bg); color: var(--xp-lecture);
+}
+.lesson-card.type-seminar .lc-badge{ background: var(--xp-seminar-bg); color: var(--xp-seminar); }
+.lc-subject{ font-size: .6rem; font-weight: 700; margin-top: .12rem; }
+.lc-meta{ font-size: .48rem; color: #5a6b8c; margin-top: .1rem; }
+.lc-actions{ position: absolute; top: .3rem; right: .3rem; display: flex; gap: .15rem; }
+.lc-actions button{
+  border: none; background: rgba(0,0,0,.06); border-radius: .18rem;
+  width: 1rem; height: 1rem; font-size: .45rem; line-height: 1;
+}
+.lc-actions button:hover{ background: rgba(0,0,0,.14); }
+.day-empty{ font-size: .5rem; color: #8b98b3; text-align: center; padding: .5rem 0; }
+
+/* ---------- Формы XP ---------- */
+.xp-form{ display: flex; flex-direction: column; gap: .55rem; }
+.xp-form label{
+  display: flex; flex-direction: column; gap: .18rem;
+  font-size: .58rem; color: var(--xp-text); font-weight: 600;
+}
+.xp-form input, .xp-form select{
+  border: 1px solid #8fa6cc; border-radius: .2rem; padding: .3rem .4rem;
+  background: #fff;
+}
+.xp-form input:focus, .xp-form select:focus, textarea:focus{
+  outline: 2px solid var(--xp-blue-glow); outline-offset: 1px;
+}
+.xp-form-actions{ display: flex; gap: .4rem; justify-content: flex-end; margin-top: .3rem; }
+
+.xp-address-actions{ display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .3rem; }
+.settings-resolved{ font-size: .5rem; color: #5a6b8c; margin-top: .35rem; min-height: .7rem; }
+.settings-resolved.ok{ color: var(--xp-seminar); font-weight: 600; }
+.settings-resolved.error{ color: #b52d20; font-weight: 600; }
+
+.xp-groupbox{
+  border: 1px solid #b7c6e3; border-radius: .3rem; padding: .55rem .6rem .65rem;
+  margin-bottom: .55rem; background: #fbfcfe; position: relative;
+}
+.xp-groupbox-title{
+  font-size: .56rem; font-weight: 700; color: var(--xp-blue-dark);
+  margin-bottom: .4rem;
+}
+
+/* ---------- Конспекты ---------- */
+.notes-body{ display: flex; gap: .5rem; padding: .5rem; }
+.notes-sidebar{
+  width: 10rem; flex-shrink: 0; display: flex; flex-direction: column; gap: .3rem;
+}
+.notes-list{
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: .2rem;
+  border: 1px solid #ccd7ec; border-radius: .25rem; background: #fff; padding: .25rem;
+}
+.note-item{
+  padding: .3rem .35rem; border-radius: .2rem; font-size: .56rem;
+  border: 1px solid transparent; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.note-item:hover{ background: #eaf1ff; }
+.note-item.active{ background: var(--xp-blue-mid); color: #fff; }
+.notes-empty{ font-size: .5rem; color: #8b98b3; text-align: center; padding: .5rem 0; }
+
+.notes-main{ flex: 1; display: flex; flex-direction: column; min-width: 0; gap: .35rem; }
+.notes-main-toolbar{ display: flex; gap: .3rem; align-items: center; }
+.notes-title-input{
+  flex: 1; border: 1px solid #8fa6cc; border-radius: .2rem; padding: .28rem .4rem;
+  font-size: .62rem; font-weight: 700;
+}
+.notes-panes{ flex: 1; display: flex; gap: .4rem; min-height: 0; }
+#notes-editor{
+  flex: 1; resize: none; border: 1px solid #8fa6cc; border-radius: .25rem;
+  padding: .5rem; font-size: .58rem; line-height: 1.5; font-family: "Consolas", "Courier New", monospace;
+}
+.notes-preview{
+  flex: 1; overflow-y: auto; border: 1px solid #ccd7ec; border-radius: .25rem;
+  padding: .5rem .7rem; background: #fff; font-size: .6rem; line-height: 1.55;
+}
+.notes-preview h1{ font-size: 1rem; border-bottom: 1px solid #dde5f5; padding-bottom: .2rem; }
+.notes-preview h2{ font-size: .85rem; }
+.notes-preview h3{ font-size: .72rem; }
+.notes-preview code{ background: #eef2fb; padding: .05rem .25rem; border-radius: .15rem; font-size: .9em; }
+.notes-preview pre{ background: #1e2a3f; color: #dbe7ff; padding: .5rem; border-radius: .25rem; overflow-x: auto; }
+.notes-preview pre code{ background: none; color: inherit; }
+.notes-preview blockquote{ border-left: .2rem solid var(--xp-blue-mid); margin: .3rem 0; padding: .1rem .6rem; color: #48597a; background: #f2f6fd; }
+.notes-preview ul, .notes-preview ol{ padding-left: 1.2rem; }
+.notes-preview a{ color: var(--xp-blue-mid); }
+
+/* ---------- Погода и пробки ---------- */
+.weather-panels{ display: flex; flex-direction: column; gap: .5rem; }
+.weather-detail{ font-size: .6rem; line-height: 1.6; }
+.weather-loading{ color: #8b98b3; font-size: .55rem; }
+.weather-error{ color: #b52d20; font-size: .55rem; }
+.weather-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .4rem; }
+.weather-stat{ background: #fff; border: 1px solid #dde5f5; border-radius: .25rem; padding: .35rem .45rem; }
+.weather-stat .ws-label{ font-size: .46rem; color: #8b98b3; text-transform: uppercase; }
+.weather-stat .ws-value{ font-size: .68rem; font-weight: 700; color: var(--xp-blue-dark); }
+.traffic-route{ font-size: .62rem; font-weight: 700; color: var(--xp-blue-dark); margin-bottom: .3rem; }
+.traffic-delay{ font-weight: 700; }
+.traffic-delay.ok{ color: var(--xp-seminar); }
+.traffic-delay.bad{ color: #b52d20; }
+
+/* ---------- Модальное окно ---------- */
+.xp-modal-overlay{
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center;
+}
+.xp-modal{ position: static; width: 20rem; height: auto; }
+.xp-modal-body{ display: flex; align-items: center; gap: .6rem; padding: 1rem .8rem; }
+.xp-modal-icon{
+  flex-shrink: 0; width: 1.8rem; height: 1.8rem; border-radius: 50%;
+  background: #3a93ff; color: #fff; display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 1rem;
+}
+.xp-modal-text{ font-size: .62rem; }
+.xp-modal-actions{
+  display: flex; justify-content: center; gap: .6rem;
+  padding: 0 .8rem .8rem;
+}
+.xp-modal-actions .xp-button{ width: 5rem; }
+
+/* ---------- Меню Пуск ---------- */
+#start-menu{
+  position: fixed; bottom: 2.6rem; left: .3rem; z-index: 400;
+  width: 21rem;
+  background: #f2f6fe;
+  border: 1px solid var(--xp-window-border);
+  border-radius: .5rem .5rem .3rem .3rem;
+  box-shadow: 0 .5rem 1.4rem rgba(0,0,0,.45);
+  overflow: hidden;
+}
+.start-menu-header{
+  background: linear-gradient(90deg, var(--xp-titlebar-grad-a), var(--xp-titlebar-grad-c));
+  color: #fff; display: flex; align-items: center; gap: .5rem; padding: .55rem .6rem;
+}
+.start-menu-avatar{
+  width: 2.1rem; height: 2.1rem; border-radius: .3rem; background: rgba(255,255,255,.25);
+  border: 1px solid rgba(255,255,255,.6);
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .7rem;
+}
+.start-menu-username{ font-size: .72rem; font-weight: 700; }
+.start-menu-columns{ display: flex; }
+.start-menu-col-left{
+  flex: 1.5; background: #fff; padding: .4rem; display: flex; flex-direction: column; gap: .1rem;
+}
+.start-menu-col-right{
+  flex: 1; background: #dbe6fb; padding: .4rem; display: flex; flex-direction: column; gap: .1rem;
+}
+.start-menu-item, .start-menu-item-right{
+  display: flex; align-items: center; gap: .5rem; background: transparent; border: none;
+  padding: .35rem .4rem; border-radius: .25rem; text-align: left;
+}
+.start-menu-item img, .start-menu-item-right img{ width: 1.6rem; height: 1.6rem; object-fit: contain; }
+.start-menu-item:hover, .start-menu-item-right:hover{ background: var(--xp-blue-light); color: #fff; }
+.start-menu-item:hover .sm-sub, .start-menu-item-right:hover span{ color: #fff; }
+.sm-title{ font-size: .6rem; font-weight: 700; }
+.sm-sub{ font-size: .48rem; color: #8b98b3; }
+.start-menu-item-right span{ font-size: .58rem; font-weight: 600; color: var(--xp-blue-dark); }
+.start-menu-footer{
+  background: #d3e0f7; border-top: 1px solid #b7c6e3; padding: .35rem .5rem;
+  display: flex; justify-content: flex-end;
+}
+.start-menu-shutdown{
+  display: flex; align-items: center; gap: .35rem;
+  background: linear-gradient(180deg, #ffb37a, #e97a2e); color: #fff;
+  border: 1px solid #b25e1f; border-radius: .25rem; padding: .3rem .6rem; font-size: .58rem; font-weight: 700;
+}
+.shutdown-icon{ font-size: .7rem; }
+
+/* ---------- Плашка "Активация" (аналог Windows watermark) ---------- */
+#activation-watermark{
+  position: fixed;
+  right: .6rem;
+  bottom: 3.3rem; /* над панелью задач */
+  z-index: 9000;  /* поверх всех окон, как настоящий Windows watermark */
+  text-align: right;
+  color: rgba(255,255,255,.82);
+  font-size: .48rem;
+  line-height: 1.4;
+  text-shadow: 0 1px 2px rgba(0,0,0,.65);
+  pointer-events: none; /* не перехватывает клики по рабочему столу под собой */
+  user-select: none;
+}
+#activation-watermark a{
+  color: rgba(255,255,255,.88);
+  text-decoration: underline;
+  pointer-events: auto; /* сама ссылка кликабельна */
+}
+#activation-watermark a:hover{ color: #fff; }
+
+/* ---------- Панель задач ---------- */
+#taskbar{
+  position: fixed; bottom: 0; left: 0; right: 0; height: 2.6rem; z-index: 300;
+  background: linear-gradient(180deg, var(--xp-taskbar-top) 0%, var(--xp-taskbar-grad-a) 12%, var(--xp-taskbar-grad-b) 100%);
+  border-top: 1px solid #6fa8ff;
+  display: flex; align-items: center; padding: 0 .3rem; gap: .4rem;
+  box-shadow: 0 -.2rem .4rem rgba(0,0,0,.25);
+}
+#start-button{
+  display: flex; align-items: center; gap: .3rem;
+  height: 2rem; padding: 0 .8rem 0 .5rem;
+  background: linear-gradient(180deg, #6fce4e, var(--xp-green-btn-a) 45%, var(--xp-green-btn-b) 100%);
+  color: #fff; border: none; border-radius: .3rem;
+  font-size: .68rem; font-weight: 700; font-style: italic;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 .1rem .2rem rgba(0,0,0,.3);
+}
+#start-button.active, #start-button:active{ filter: brightness(.9); }
+.start-flag{ font-size: .8rem; }
+#taskbar-apps{ flex: 1; display: flex; gap: .3rem; overflow-x: auto; height: 2rem; align-items: center; }
+.taskbar-app-btn{
+  height: 1.9rem; padding: 0 .6rem; display: flex; align-items: center; gap: .3rem;
+  background: linear-gradient(180deg, #2f74e0, #1a52b8);
+  border: 1px solid #123f8f; border-radius: .25rem; color: #fff; font-size: .56rem;
+  max-width: 9rem; overflow: hidden;
+}
+.taskbar-app-btn img{ width: 1.1rem; height: 1.1rem; object-fit: contain; flex-shrink: 0; }
+.taskbar-app-btn span{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.taskbar-app-btn.active{ background: linear-gradient(180deg, #16386e, #0d2450); box-shadow: inset 0 .1rem .3rem rgba(0,0,0,.5); }
+#system-tray{
+  display: flex; align-items: center; gap: .5rem;
+  background: #1147b8; border: 1px solid #0a3491; border-radius: .3rem .0 .0 .3rem;
+  padding: 0 .6rem; height: 1.9rem;
+}
+#tray-weather{ display: flex; align-items: center; gap: .2rem; color: #fff; font-size: .56rem; }
+#tray-clock{ color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .02em; }
+
+/* =========================================================
+   Адаптация под мобильные устройства
+   ========================================================= */
+@media (max-width: 780px){
+  html{ font-size: calc(15px * var(--scale)); }
+
+  .glass-widget{ width: calc(100vw - 1.6rem); left: .8rem; right: .8rem; }
+
+  #desktop-icons{ flex-direction: row; flex-wrap: wrap; width: calc(100vw - 1.6rem); }
+  .desktop-icon{ width: 4rem; }
+
+  .xp-window{
+    top: .4rem !important; left: .4rem !important;
+    width: calc(100vw - .8rem) !important;
+    height: calc(100vh - 3.4rem) !important;
+  }
+  .xp-window.maximized{ height: calc(100vh - 2.6rem) !important; }
+
+  .notes-body{ flex-direction: column; }
+  .notes-sidebar{ width: 100%; max-height: 8rem; }
+  .notes-panes{ flex-direction: column; }
+
+  .schedule-days{ grid-template-columns: 1fr; }
+
+  #start-menu{ width: calc(100vw - .6rem); left: .3rem; }
+
+  .resize-handle{ display: none; } /* на тач-устройствах ресайз мышью недоступен */
+}

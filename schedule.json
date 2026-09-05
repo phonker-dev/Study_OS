@@ -1,0 +1,327 @@
+{
+  "even": {
+    "mon": [
+      {
+        "id": "lesson-mtogukjt-3w6kg",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "seminar",
+        "subject": "Трудовое право",
+        "room": "-",
+        "teacher": "Данко В.А."
+      },
+      {
+        "id": "lesson-mtogv7ww-ckll6",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "lecture",
+        "subject": "Трудовое право",
+        "room": "-",
+        "teacher": "Данко В.А."
+      }
+    ],
+    "tue": [
+      {
+        "id": "lesson-mtoh1uqx-4mp6z",
+        "start": "11:50",
+        "end": "13:20",
+        "type": "lecture",
+        "subject": "Уголовно-процессуальное право",
+        "room": "-",
+        "teacher": "Шошина С.М."
+      },
+      {
+        "id": "lesson-mtoh4dqo-6l29m",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "lecture",
+        "subject": "Гражданский процесс",
+        "room": "-",
+        "teacher": "Колягин Д.В."
+      },
+      {
+        "id": "lesson-mtoh5f8u-lok30",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "lecture",
+        "subject": "Социология и политология",
+        "room": "-",
+        "teacher": "Лякутина Ю.П."
+      }
+    ],
+    "wed": [
+      {
+        "id": "lesson-mtoh6y77-3oii7",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "seminar",
+        "subject": "Гражданский процесс",
+        "room": "-",
+        "teacher": "Филимоненко Т.С."
+      },
+      {
+        "id": "lesson-mtoh808k-7y9pi",
+        "start": "17:20",
+        "end": "18:50",
+        "type": "seminar",
+        "subject": "Социология и политология",
+        "room": "-",
+        "teacher": "Лякутина Ю.П."
+      }
+    ],
+    "thu": [
+      {
+        "id": "lesson-mtoh9hxm-jey9z",
+        "start": "11:50",
+        "end": "13:20",
+        "type": "lecture",
+        "subject": "Правоохранительные органы",
+        "room": "-",
+        "teacher": "Мункуева К.Ю."
+      },
+      {
+        "id": "lesson-mtohafwh-lf40y",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "lecture",
+        "subject": "Уголовно-процессуальное право",
+        "room": "-",
+        "teacher": "Шошина С.М."
+      },
+      {
+        "id": "lesson-mtohbek1-hstjg",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "seminar",
+        "subject": "Уголовно-процессуальное право",
+        "room": "-",
+        "teacher": "Шошина С.М."
+      },
+      {
+        "id": "lesson-mtohc380-xjmy5",
+        "start": "17:20",
+        "end": "18:50",
+        "type": "seminar",
+        "subject": "Криминалистика",
+        "room": "-",
+        "teacher": "Казьмин А.В."
+      }
+    ],
+    "fri": [
+      {
+        "id": "lesson-mtohczwg-phk5o",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "lecture",
+        "subject": "Информационные технологии в проф. деятельности",
+        "room": "-",
+        "teacher": "-"
+      },
+      {
+        "id": "lesson-mtohdf7a-9onsi",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "seminar",
+        "subject": "Информационные технологии в проф. деятельности",
+        "room": "-",
+        "teacher": "-"
+      },
+      {
+        "id": "lesson-mtohecv5-czowi",
+        "start": "17:20",
+        "end": "18:50",
+        "type": "seminar",
+        "subject": "Правоохранительные органы",
+        "room": "-",
+        "teacher": "Мункуева К.Ю."
+      }
+    ],
+    "sat": [
+      {
+        "id": "lesson-mtohfa9p-sxt77",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "lecture",
+        "subject": "Иполнительное право",
+        "room": "-",
+        "teacher": "Морозов Д.С."
+      },
+      {
+        "id": "lesson-mtohg661-vnqdx",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "seminar",
+        "subject": "Исполнительное право",
+        "room": "-",
+        "teacher": "Морозов Д.С."
+      }
+    ]
+  },
+  "odd": {
+    "mon": [
+      {
+        "id": "lesson-mtohhpum-944e8",
+        "start": "11:50",
+        "end": "13:20",
+        "type": "seminar",
+        "subject": "Уголовно-процессуальное право",
+        "room": "-",
+        "teacher": "Шошина С.М."
+      },
+      {
+        "id": "lesson-mtohies6-25epc",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "seminar",
+        "subject": "Трудовое право",
+        "room": "-",
+        "teacher": "Данко В.А."
+      },
+      {
+        "id": "lesson-mtohiv9l-stgnv",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "lecture",
+        "subject": "Трудовое право",
+        "room": "-",
+        "teacher": "Данко В.А."
+      }
+    ],
+    "tue": [
+      {
+        "id": "lesson-mtohjrzj-tlxq9",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "lecture",
+        "subject": "Гражданский процесс",
+        "room": "-",
+        "teacher": "Колягин Д.В."
+      },
+      {
+        "id": "lesson-mtohkl6c-1a7vy",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "lecture",
+        "subject": "Социология и политология",
+        "room": "-",
+        "teacher": "Лякутина Ю.П."
+      }
+    ],
+    "wed": [
+      {
+        "id": "lesson-mtohldm0-erglw",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "lecture",
+        "subject": "Уголовно-процессуальное право",
+        "room": "-",
+        "teacher": "Шошина С.М."
+      },
+      {
+        "id": "lesson-mtohmzor-ee078",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "seminar",
+        "subject": "Гражданский процесс",
+        "room": "-",
+        "teacher": "Филимоненко Т.С."
+      },
+      {
+        "id": "lesson-mtohntcf-ghxht",
+        "start": "17:20",
+        "end": "18:50",
+        "type": "seminar",
+        "subject": "Уголовно-процессуальное право",
+        "room": "-",
+        "teacher": "Шошина С.М."
+      }
+    ],
+    "thu": [
+      {
+        "id": "lesson-mtohosax-d9vsk",
+        "start": "11:50",
+        "end": "13:20",
+        "type": "lecture",
+        "subject": "Правоохранительные органы",
+        "room": "-",
+        "teacher": "Мункуева К.Ю."
+      },
+      {
+        "id": "lesson-mtohpoj8-d0azx",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "lecture",
+        "subject": "Уголовно-процессуальное право",
+        "room": "-",
+        "teacher": "Шошина С.М."
+      },
+      {
+        "id": "lesson-mtohqamu-moyrt",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "seminar",
+        "subject": "Уголовно-процессуальное право",
+        "room": "-",
+        "teacher": "Шошина С.М."
+      },
+      {
+        "id": "lesson-mtohqyn0-3e1ld",
+        "start": "17:20",
+        "end": "18:50",
+        "type": "seminar",
+        "subject": "Криминалистика",
+        "room": "-",
+        "teacher": "Казьмин А.В."
+      }
+    ],
+    "fri": [
+      {
+        "id": "lesson-mtohru1z-t4png",
+        "start": "14:00",
+        "end": "15:40",
+        "type": "lecture",
+        "subject": "Информационные технологии в проф. деятельности",
+        "room": "-",
+        "teacher": "-"
+      },
+      {
+        "id": "lesson-mtohs8c3-cqrmj",
+        "start": "15:40",
+        "end": "17:10",
+        "type": "seminar",
+        "subject": "Информационные технологии в проф. деятельности",
+        "room": "-",
+        "teacher": "-"
+      },
+      {
+        "id": "lesson-mtoht6or-wh4xh",
+        "start": "17:20",
+        "end": "18:50",
+        "type": "seminar",
+        "subject": "Правоохранительные органы",
+        "room": "-",
+        "teacher": "Мункуева К.Ю."
+      }
+    ],
+    "sat": [
+      {
+        "id": "lesson-mtohtmov-zf3zz",
+        "start": "11:50",
+        "end": "13:20",
+        "type": "lecture",
+        "subject": "Криминалистика",
+        "room": "-",
+        "teacher": "Казьмин А.В."
+      },
+      {
+        "id": "lesson-mtohuguv-h3v1n",
+        "start": "14:00",
+        "end": "15:30",
+        "type": "lecture",
+        "subject": "Исполнительное право",
+        "room": "-",
+        "teacher": "Морозов Д.С."
+      }
+    ]
+  }
+}
