@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="cn-page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#f7f9fe"/><stop offset="1" stop-color="#dde5f3"/>
+    </linearGradient>
+    <linearGradient id="cn-pen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffd66b"/><stop offset=".45" stop-color="#f2ad20"/><stop offset="1" stop-color="#b9760a"/>
+    </linearGradient>
+    <linearGradient id="cn-spiral" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef2f9"/><stop offset="1" stop-color="#8e9ab2"/>
+    </linearGradient>
+  </defs>
+  <path d="M13 41h26" stroke="#000" stroke-opacity=".22" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M13.5 6.5h24a2 2 0 0 1 2 2v31a2 2 0 0 1-2 2h-24z" fill="url(#cn-page)" stroke="#5c6f92" stroke-width="1.2"/>
+  <g stroke="#b9c6dd" stroke-width="1.1" stroke-linecap="round">
+    <path d="M19 14h15"/><path d="M19 19.5h15"/><path d="M19 25h15"/><path d="M19 30.5h11"/><path d="M19 36h8"/>
+  </g>
+  <path d="M15.5 6.5h1.6v35h-1.6z" fill="#c3400f" opacity=".55"/>
+  <g stroke="#54627e" stroke-width="1.1" fill="url(#cn-spiral)">
+    <rect x="9.5" y="9" width="8" height="3.2" rx="1.6"/>
+    <rect x="9.5" y="17" width="8" height="3.2" rx="1.6"/>
+    <rect x="9.5" y="25" width="8" height="3.2" rx="1.6"/>
+    <rect x="9.5" y="33" width="8" height="3.2" rx="1.6"/>
+  </g>
+  <g transform="rotate(38 32 30)">
+    <rect x="29.4" y="14" width="5.2" height="20" rx="1" fill="url(#cn-pen)" stroke="#8a5606" stroke-width=".9"/>
+    <path d="M29.4 34h5.2l-2.6 5.4z" fill="#f6e3bd" stroke="#8a5606" stroke-width=".9" stroke-linejoin="round"/>
+    <path d="M30.9 37.4h2.2l-1.1 2z" fill="#2b3247"/>
+    <rect x="29.4" y="12" width="5.2" height="2.6" rx=".6" fill="#c9d2e2" stroke="#7d8798" stroke-width=".8"/>
+  </g>
+</svg>

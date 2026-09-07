@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <radialGradient id="wx-sun" cx=".38" cy=".33" r=".78">
+      <stop offset="0" stop-color="#fffbe0"/><stop offset=".45" stop-color="#ffd83b"/><stop offset="1" stop-color="#f08a12"/>
+    </radialGradient>
+    <linearGradient id="wx-cloud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#eef4fd"/><stop offset="1" stop-color="#b9caea"/>
+    </linearGradient>
+    <linearGradient id="wx-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fc6f5"/><stop offset="1" stop-color="#3d84d6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="30" cy="17" r="14.5" fill="url(#wx-sky)" opacity=".2"/>
+  <g stroke="#f6a81c" stroke-width="2.4" stroke-linecap="round">
+    <path d="M18 4.5v4"/><path d="M18 25.5v4"/><path d="M4.6 17h4"/><path d="M27.4 17h4"/>
+    <path d="M8.5 7.5l2.9 2.9"/><path d="M24.6 23.6l2.9 2.9"/><path d="M27.5 7.5l-2.9 2.9"/><path d="M11.4 23.6l-2.9 2.9"/>
+  </g>
+  <circle cx="18" cy="17" r="8.2" fill="url(#wx-sun)" stroke="#d8790a" stroke-width="1"/>
+  <path d="M17 34.5a7 7 0 0 1 1.2-13.9 9.4 9.4 0 0 1 17.7 2.6 6.4 6.4 0 0 1-.9 12.7z"
+        fill="url(#wx-cloud)" stroke="#6f85ab" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M20 24.4a9.4 9.4 0 0 1 14.6-2.6c-4.6-1-9.9.1-14.6 2.6z" fill="#ffffff" opacity=".75"/>
+  <g stroke="#3f8fe0" stroke-width="2.2" stroke-linecap="round">
+    <path d="M19 38.5l-1.6 3.4"/><path d="M26 38.5l-1.6 3.4"/><path d="M33 38.5l-1.6 3.4"/>
+  </g>
+</svg>
