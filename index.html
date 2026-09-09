@@ -369,36 +369,8 @@
         </div>
         <div class="admin-section">
           <h4>Электронный журнал (посещаемость)</h4>
-          <p>Видно и редактируется только старостой. Выберите день, четность и пару — список группы подтянется автоматически.</p>
-          <div class="admin-att-controls">
-            <label>Дата
-              <input type="date" id="att-date">
-            </label>
-            <label>Неделя
-              <select id="att-parity">
-                <option value="even">Чётная</option>
-                <option value="odd">Нечётная</option>
-              </select>
-            </label>
-            <label>День
-              <select id="att-day">
-                <option value="mon">Понедельник</option>
-                <option value="tue">Вторник</option>
-                <option value="wed">Среда</option>
-                <option value="thu">Четверг</option>
-                <option value="fri">Пятница</option>
-                <option value="sat">Суббота</option>
-              </select>
-            </label>
-            <label>Пара
-              <select id="att-lesson"></select>
-            </label>
-          </div>
-          <div class="admin-att-actions">
-            <button class="xp-tool-btn" id="att-mark-all">Отметить всех присутствующими</button>
-            <button class="xp-tool-btn primary" id="att-save">Сохранить посещаемость</button>
-          </div>
-          <ul id="att-student-list" class="att-student-list"></ul>
+          <p>Вынесен в отдельное окно, чтобы не мешать остальному. Откройте «Журнал» через меню Пуск — вход туда общий с админкой, повторно пароль вводить не нужно.</p>
+          <button class="xp-tool-btn" id="admin-open-attendance">Открыть журнал</button>
         </div>
         <div class="admin-section">
           <h4>Управление мемами (Щитпост)</h4>
@@ -413,6 +385,76 @@
         <button class="xp-tool-btn" id="admin-logout">Выйти</button>
       </div>
     </div>
+  </div>
+
+  <!-- Окно: Журнал посещаемости (отдельно от админки, тот же вход по паролю) -->
+  <div class="xp-window hidden" id="window-attendance" data-app="attendance">
+    <div class="xp-titlebar">
+      <div class="xp-titlebar-left">
+        <img src="PNG/Settings.png" class="xp-title-icon" alt="">
+        <span class="xp-title-text">Журнал посещаемости</span>
+      </div>
+      <div class="xp-titlebar-buttons">
+        <button class="xp-btn-min" title="Свернуть">_</button>
+        <button class="xp-btn-max" title="Развернуть">&#9633;</button>
+        <button class="xp-btn-close" title="Закрыть">&#10005;</button>
+      </div>
+    </div>
+    <div class="xp-window-body" id="attendance-body">
+      <div id="att-login" class="admin-login">
+        <h3>Вход старосты</h3>
+        <p>Тот же пароль, что и в админ-панели.</p>
+        <label>Пароль: <input type="password" id="att-password" placeholder="Введите пароль"></label>
+        <button class="xp-button primary" id="att-login-btn">Войти</button>
+        <div id="att-login-error" style="color:red;font-size:0.6rem;"></div>
+      </div>
+      <div id="att-panel" style="display:none;">
+        <p class="admin-section-hint">Видно и редактируется только старостой. Выберите день, чётность и пару — список группы подтянется автоматически.</p>
+        <div class="admin-att-controls">
+          <label>Дата
+            <input type="date" id="att-date">
+          </label>
+          <label>Неделя
+            <select id="att-parity">
+              <option value="even">Чётная</option>
+              <option value="odd">Нечётная</option>
+            </select>
+          </label>
+          <label>День
+            <select id="att-day">
+              <option value="mon">Понедельник</option>
+              <option value="tue">Вторник</option>
+              <option value="wed">Среда</option>
+              <option value="thu">Четверг</option>
+              <option value="fri">Пятница</option>
+              <option value="sat">Суббота</option>
+            </select>
+          </label>
+          <label>Пара
+            <select id="att-lesson"></select>
+          </label>
+        </div>
+        <div class="admin-att-actions">
+          <button class="xp-tool-btn" id="att-mark-all">Отметить всех присутствующими</button>
+          <button class="xp-tool-btn primary" id="att-save">Сохранить посещаемость</button>
+        </div>
+        <div id="att-meta" class="att-meta hidden"></div>
+        <ul id="att-student-list" class="att-student-list"></ul>
+        <div class="att-history-block">
+          <h5>Записи за эту дату</h5>
+          <div id="att-history" class="att-history"></div>
+        </div>
+        <button class="xp-tool-btn" id="att-logout" style="margin-top:.5rem;">Выйти</button>
+      </div>
+    </div>
+    <div class="resize-handle rh-n"></div>
+    <div class="resize-handle rh-s"></div>
+    <div class="resize-handle rh-e"></div>
+    <div class="resize-handle rh-w"></div>
+    <div class="resize-handle rh-ne"></div>
+    <div class="resize-handle rh-nw"></div>
+    <div class="resize-handle rh-se"></div>
+    <div class="resize-handle rh-sw"></div>
   </div>
 
   <!-- Модальное окно подтверждения удаления -->
@@ -498,7 +540,7 @@
         <span id="tray-weather-icon"></span>
         <span id="tray-weather-temp">--°C</span>
       </div>
-      <div id="tray-clock"></div>
+      <div id="tray-clock" title="Открыть календарь" role="button" tabindex="0"></div>
     </div>
   </div>
 

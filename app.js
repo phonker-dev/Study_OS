@@ -48,18 +48,19 @@ const APP_WINDOW_IDS = {
   weather: 'window-weather',
   settings: 'window-settings',
   shitpost: 'window-shitpost',
-  admin: 'window-admin'
+  admin: 'window-admin',
+  attendance: 'window-attendance'
 };
 const APP_TITLES = {
   schedule: 'Расписание', 'lesson-form': 'Пара', notes: 'Конспекты',
   weather: 'Погода и пробки', settings: 'Панель управления',
-  shitpost: 'Щитпост', admin: 'Админ-панель'
+  shitpost: 'Щитпост', admin: 'Админ-панель', attendance: 'Журнал посещаемости'
 };
 const APP_ICONS = {
   schedule: 'PNG/Raspisanie.svg', 'lesson-form': 'PNG/Raspisanie.svg',
   notes: 'PNG/Conspect.svg', weather: 'PNG/Weather.svg',
   settings: 'PNG/Settings.png', shitpost: 'PNG/Shitpost.png',
-  admin: 'PNG/Settings.png'
+  admin: 'PNG/Settings.png', attendance: 'PNG/Settings.png'
 };
 
 /* ---------------------------------------------------------
@@ -251,22 +252,40 @@ const DB = {
 
   /* Посещаемость: и чтение, и запись доступны только вошедшему старосте
      (RLS в supabase-schema.sql разрешает select/insert/update/delete
-     только роли authenticated — анонимный ключ ничего не увидит). */
-  async loadAttendance(lessonId, date){
+     только роли authenticated — анонимный ключ ничего не увидит).
+
+     Важно: запись НЕ привязана к id пары из расписания — время, предмет,
+     кабинет и т.п. сохраняются «снимком» прямо в строке attendance.
+     Поэтому редактирование или удаление пары в расписании никогда не
+     портит и не осиротит уже сохранённые отметки; ключ — дата + время
+     начала пары, этого достаточно, чтобы у группы не было двух разных
+     пар одновременно. */
+  async loadAttendance(date, startTime){
     if (!this.ready) return null;
     const res = await this.client.from('attendance')
-      .select('present').eq('lesson_id', lessonId).eq('lesson_date', date).maybeSingle();
+      .select('*').eq('lesson_date', date).eq('start_time', startTime).maybeSingle();
     if (res.error) throw res.error;
-    return res.data ? res.data.present : null;
+    return res.data || null;
   },
-  async saveAttendance(lessonId, date, presentList){
+  async saveAttendance(record){
     if (!this.ready) return false;
     const res = await this.client.from('attendance').upsert({
-      lesson_id: lessonId, lesson_date: date, present: presentList,
+      lesson_date: record.date, start_time: record.start, end_time: record.end || '',
+      subject: record.subject || '', room: record.room || '', teacher: record.teacher || '',
+      lesson_type: record.type || 'seminar', present: record.present,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'lesson_id,lesson_date' });
+    }, { onConflict: 'lesson_date,start_time' });
     if (res.error) throw res.error;
     return true;
+  },
+  /* Список всех сохранённых записей за дату — виден и тогда, когда
+     соответствующая пара уже переименована или удалена из расписания. */
+  async listAttendanceByDate(date){
+    if (!this.ready) return [];
+    const res = await this.client.from('attendance')
+      .select('*').eq('lesson_date', date).order('start_time');
+    if (res.error) throw res.error;
+    return res.data || [];
   },
 
   /* Права на запись: когда база общая, писать может только вошедший админ */
@@ -811,7 +830,12 @@ function toggleCalendarPopup(){
 
 function initCalendarPopup(){
   const trayClock = $('tray-clock');
-  if (trayClock) trayClock.addEventListener('click', function(e){ e.stopPropagation(); toggleCalendarPopup(); });
+  if (trayClock){
+    trayClock.addEventListener('click', function(e){ e.stopPropagation(); toggleCalendarPopup(); });
+    trayClock.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleCalendarPopup(); }
+    });
+  }
 
   const closeBtn = $('cal-close');
   if (closeBtn) closeBtn.addEventListener('click', closeCalendarPopup);
@@ -1702,12 +1726,21 @@ function renderAdminMemes(){
 
 /* ---------------------------------------------------------
    21b. Электронный журнал посещаемости (только для старосты)
+
+   Ключевое решение: запись НЕ ссылается на id пары из расписания.
+   При сохранении в неё «снимком» кладутся предмет/время/кабинет —
+   поэтому переименование или удаление пары в расписании никогда
+   не портит уже сохранённую историю. Ключ записи — дата + время
+   начала (у группы не бывает двух разных пар одновременно).
    --------------------------------------------------------- */
-State.attendance = {}; // { present: [...фио...] } для текущей выбранной пары/даты
+State.attendanceLoaded = null; // текущая загруженная запись (снимок + present)
 
-function attendanceLocalKey(lessonId, date){ return lessonId + '|' + date; }
+function attendanceLocalKey(date, start){ return date + '|' + start; }
 
-/* Список пар выбранного дня/четности в select #att-lesson */
+function attendanceLocalAll(){ return Store.load(LS_KEYS.attendance, {}); }
+
+/* Список пар выбранного дня/четности в select #att-lesson — только
+   чтобы удобно выбрать предмет/время, на сохранённые записи не влияет */
 function initAttendanceLessonOptions(){
   const daySel = $('att-day'); const paritySel = $('att-parity'); const lessonSel = $('att-lesson');
   if (!daySel || !paritySel || !lessonSel) return;
@@ -1725,6 +1758,27 @@ function initAttendanceLessonOptions(){
     opt.textContent = lesson.start + ' — ' + lesson.subject;
     lessonSel.appendChild(opt);
   });
+}
+
+/* Снимок текущей выбранной в select'е пары (не запись из БД) */
+function currentLessonSnapshot(){
+  const lessonSel = $('att-lesson'); const daySel = $('att-day'); const paritySel = $('att-parity');
+  if (!lessonSel || !lessonSel.value) return null;
+  const lessons = ((State.schedule[paritySel.value] || {})[daySel.value] || []);
+  const lesson = lessons.find(function(l){ return l.id === lessonSel.value; });
+  if (!lesson) return null;
+  return { start: lesson.start, end: lesson.end, subject: lesson.subject, room: lesson.room, teacher: lesson.teacher, type: lesson.type };
+}
+
+function renderAttendanceMeta(snapshot){
+  const meta = $('att-meta');
+  if (!meta) return;
+  if (!snapshot){ meta.textContent = ''; meta.classList.add('hidden'); return; }
+  meta.classList.remove('hidden');
+  meta.innerHTML = '<b>' + escapeHtml(snapshot.subject || '—') + '</b> · ' +
+    escapeHtml(snapshot.start || '') + (snapshot.end ? '—' + escapeHtml(snapshot.end) : '') +
+    (snapshot.room ? ' · ' + escapeHtml(snapshot.room) : '') +
+    (snapshot.teacher ? ' · ' + escapeHtml(snapshot.teacher) : '');
 }
 
 function renderAttendanceList(presentSet){
@@ -1745,20 +1799,108 @@ function renderAttendanceList(presentSet){
   });
 }
 
+/* Загружает запись для текущей выбранной в дропдауне пары (по дате+времени) */
 async function loadAttendanceForSelection(){
-  const lessonSel = $('att-lesson'); const dateInput = $('att-date');
-  if (!lessonSel || !dateInput || !lessonSel.value) { renderAttendanceList(new Set()); return; }
-  const lessonId = lessonSel.value; const date = dateInput.value || formatIsoDate(now());
-  const key = attendanceLocalKey(lessonId, date);
+  const dateInput = $('att-date');
+  const snapshot = currentLessonSnapshot();
+  const date = (dateInput && dateInput.value) || formatIsoDate(now());
+  if (!dateInput || !snapshot){
+    State.attendanceLoaded = null; renderAttendanceMeta(null); renderAttendanceList(new Set());
+    renderAttendanceHistory(date);
+    return;
+  }
+  const key = attendanceLocalKey(date, snapshot.start);
 
-  let present = Store.load(LS_KEYS.attendance, {})[key];
-  if (DB.ready){
+  let record = attendanceLocalAll()[key] || null;
+  if (DB.ready && State.isAdmin){
     try {
-      const remote = await DB.loadAttendance(lessonId, date);
-      if (remote) present = remote;
+      const remote = await DB.loadAttendance(date, snapshot.start);
+      if (remote) record = { present: remote.present, subject: remote.subject, room: remote.room, teacher: remote.teacher, type: remote.lesson_type, end: remote.end_time };
     } catch(e){ showToast('Журнал загружен только локально: ' + e.message, true); }
   }
-  renderAttendanceList(new Set(present || []));
+  State.attendanceLoaded = { date: date, start: snapshot.start };
+  renderAttendanceMeta(snapshot);
+  renderAttendanceList(new Set((record && record.present) || []));
+  renderAttendanceHistory(date);
+}
+
+/* Список уже сохранённых записей за выбранную дату — виден и когда
+   соответствующая пара уже переименована/удалена из расписания */
+async function renderAttendanceHistory(date){
+  const box = $('att-history');
+  if (!box) return;
+
+  const localAll = attendanceLocalAll();
+  const localEntries = Object.keys(localAll)
+    .filter(function(k){ return k.indexOf(date + '|') === 0; })
+    .map(function(k){ const rec = localAll[k]; return Object.assign({ start: k.split('|')[1] }, rec); });
+
+  let remoteEntries = [];
+  if (DB.ready && State.isAdmin){
+    try { remoteEntries = await DB.listAttendanceByDate(date); } catch(e){ /* тихо игнорируем, локальный список всё равно есть */ }
+  }
+  // сливаем, БД в приоритете при совпадении времени
+  const byStart = {};
+  localEntries.forEach(function(e){ byStart[e.start] = e; });
+  remoteEntries.forEach(function(e){
+    byStart[e.start_time] = { start: e.start_time, subject: e.subject, present: e.present };
+  });
+  const entries = Object.values(byStart).sort(function(a, b){ return a.start.localeCompare(b.start); });
+
+  box.innerHTML = '';
+  if (!entries.length){ box.innerHTML = '<div class="att-history-empty">За эту дату записей ещё нет</div>'; return; }
+  entries.forEach(function(e){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'att-history-item';
+    btn.innerHTML = '<b>' + escapeHtml(e.start) + '</b> ' + escapeHtml(e.subject || 'без названия') +
+      ' <span class="att-history-count">' + ((e.present || []).length) + '/' + GROUP_STUDENTS.length + '</span>';
+    btn.addEventListener('click', function(){ loadAttendanceRecordDirectly(date, e); });
+    box.appendChild(btn);
+  });
+}
+
+/* Открыть конкретную сохранённую запись напрямую — даже если пары
+   с таким названием/временем больше нет в расписании */
+function loadAttendanceRecordDirectly(date, entry){
+  State.attendanceLoaded = { date: date, start: entry.start };
+  renderAttendanceMeta({ start: entry.start, subject: entry.subject, end: entry.end, room: entry.room, teacher: entry.teacher });
+  renderAttendanceList(new Set(entry.present || []));
+  showToast('Открыта запись ' + entry.start + ' за ' + date);
+}
+
+function initAttendanceLogin(){
+  const loginBtn = $('att-login-btn');
+  const passwordInput = $('att-password');
+  const errorDiv = $('att-login-error');
+  if (!loginBtn || !passwordInput) return;
+
+  const doLogin = async function(){
+    loginBtn.disabled = true;
+    const res = await attemptAdminLogin(passwordInput.value);
+    loginBtn.disabled = false;
+    if (!res.ok){
+      if (errorDiv) errorDiv.textContent = res.error;
+      passwordInput.select();
+      return;
+    }
+    if (errorDiv) errorDiv.textContent = '';
+    passwordInput.value = '';
+    setAdminMode(true);
+    showToast('Вы вошли как староста');
+  };
+
+  loginBtn.addEventListener('click', doLogin);
+  passwordInput.addEventListener('keydown', function(e){
+    if (e.key === 'Enter'){ e.preventDefault(); doLogin(); }
+  });
+
+  const logout = $('att-logout');
+  if (logout) logout.addEventListener('click', async function(){
+    await DB.signOutAdmin();
+    setAdminMode(false);
+    showToast('Вы вышли из режима старосты');
+  });
 }
 
 function initAttendancePanel(){
@@ -1773,7 +1915,7 @@ function initAttendancePanel(){
   daySel.value = dayKeyForDate(today) === 'sun' ? 'mon' : dayKeyForDate(today);
 
   initAttendanceLessonOptions();
-  loadAttendanceForSelection();
+  if (State.isAdmin) loadAttendanceForSelection();
 
   [paritySel, daySel].forEach(function(el){
     el.addEventListener('change', function(){
@@ -1789,18 +1931,29 @@ function initAttendancePanel(){
   });
 
   if (saveBtn) saveBtn.addEventListener('click', async function(){
-    if (!lessonSel.value){ showToast('Нет пары для выбранного дня', true); return; }
+    const snapshot = currentLessonSnapshot() ||
+      (State.attendanceLoaded ? { start: State.attendanceLoaded.start } : null);
+    if (!snapshot){ showToast('Нет пары для выбранного дня', true); return; }
+    const date = dateInput.value || formatIsoDate(now());
     const present = Array.from(document.querySelectorAll('#att-student-list input[type=checkbox]:checked'))
       .map(function(cb){ return cb.dataset.student; });
-    const key = attendanceLocalKey(lessonSel.value, dateInput.value);
-    const all = Store.load(LS_KEYS.attendance, {});
-    all[key] = present;
+
+    const record = {
+      date: date, start: snapshot.start, end: snapshot.end || '',
+      subject: snapshot.subject || '', room: snapshot.room || '', teacher: snapshot.teacher || '',
+      type: snapshot.type || 'seminar', present: present
+    };
+
+    const key = attendanceLocalKey(date, snapshot.start);
+    const all = attendanceLocalAll();
+    all[key] = record;
     Store.save(LS_KEYS.attendance, all);
+    State.attendanceLoaded = { date: date, start: snapshot.start };
 
     if (DB.ready){
       saveBtn.disabled = true;
       try {
-        await DB.saveAttendance(lessonSel.value, dateInput.value, present);
+        await DB.saveAttendance(record);
         showToast('Посещаемость сохранена в общей базе');
       } catch(e){
         showToast('Сохранено только локально: ' + e.message, true);
@@ -1809,6 +1962,7 @@ function initAttendancePanel(){
     } else {
       showToast('Посещаемость сохранена локально');
     }
+    renderAttendanceHistory(date);
   });
 }
 
@@ -1818,12 +1972,27 @@ function setAdminMode(on){
   const panelDiv = $('admin-panel');
   if (loginDiv) loginDiv.style.display = on ? 'none' : 'block';
   if (panelDiv) panelDiv.style.display = on ? 'block' : 'none';
+  const attLogin = $('att-login');
+  const attPanel = $('att-panel');
+  if (attLogin) attLogin.style.display = on ? 'none' : 'block';
+  if (attPanel) attPanel.style.display = on ? 'block' : 'none';
   const addBtn = $('shitpost-add-btn');
   if (addBtn) addBtn.style.display = on ? 'inline-block' : 'none';
   document.body.classList.toggle('is-admin', on);
   renderScheduleWindow();
   renderShitpostGallery();
   if (on){ renderAdminMemes(); initAttendanceLessonOptions(); loadAttendanceForSelection(); }
+}
+
+/* Общая проверка пароля для обоих окон (админка и журнал) —
+   один и тот же вход открывает сессию Supabase на обоих. */
+async function attemptAdminLogin(password){
+  if (password !== ADMIN_PASSWORD) return { ok: false, error: 'Неверный пароль' };
+  if (DB.ready){
+    try { await DB.signInAdmin(password); }
+    catch(e){ return { ok: false, error: 'База отклонила вход: ' + e.message }; }
+  }
+  return { ok: true };
 }
 
 function initAdminPanel(){
@@ -1833,27 +2002,15 @@ function initAdminPanel(){
   if (!loginBtn || !passwordInput) return;
 
   const doLogin = async function(){
-    const pass = passwordInput.value;
-    if (pass !== ADMIN_PASSWORD){
-      if (errorDiv) errorDiv.textContent = 'Неверный пароль';
+    loginBtn.disabled = true;
+    const res = await attemptAdminLogin(passwordInput.value);
+    loginBtn.disabled = false;
+    if (!res.ok){
+      if (errorDiv) errorDiv.textContent = res.error;
       passwordInput.select();
       return;
     }
     if (errorDiv) errorDiv.textContent = '';
-
-    // С общей базой пароль ещё и открывает сессию Supabase —
-    // без неё RLS не даст записать ничего, даже зная пароль.
-    if (DB.ready){
-      loginBtn.disabled = true;
-      try { await DB.signInAdmin(pass); }
-      catch(e){
-        if (errorDiv) errorDiv.textContent = 'База отклонила вход: ' + e.message;
-        loginBtn.disabled = false;
-        return;
-      }
-      loginBtn.disabled = false;
-    }
-
     passwordInput.value = '';
     setAdminMode(true);
     showToast('Вы вошли как администратор');
@@ -1871,6 +2028,9 @@ function initAdminPanel(){
     showToast('Вы вышли из админ-режима');
   });
 
+  const openAtt = $('admin-open-attendance');
+  if (openAtt) openAtt.addEventListener('click', function(){ openApp('attendance'); });
+
   const sync = $('admin-sync-schedule');
   if (sync) sync.addEventListener('click', async function(){
     if (!DB.ready){ showToast('Общая база не подключена — расписание хранится локально.', true); return; }
@@ -1883,8 +2043,6 @@ function initAdminPanel(){
     }
     sync.disabled = false;
   });
-
-  initAttendancePanel();
 
   const addMemeBtn = $('admin-add-meme-btn');
   const memeFile = $('admin-meme-file');
@@ -1986,7 +2144,8 @@ function openApp(appKey){
   if (appKey === 'weather'){ fetchWeather(); fetchTraffic(); }
   if (appKey === 'settings'){ fillSettingsForm(); }
   if (appKey === 'shitpost'){ renderShitpostGallery(); }
-  if (appKey === 'admin'){ if (State.isAdmin){ renderAdminNotes(); renderAdminMemes(); } }
+  if (appKey === 'admin'){ if (State.isAdmin){ renderAdminMemes(); } }
+  if (appKey === 'attendance'){ if (State.isAdmin){ initAttendanceLessonOptions(); loadAttendanceForSelection(); } }
 }
 
 /* ---- Панель задач ---- */
@@ -2260,6 +2419,8 @@ async function init(){
 
   initShitpost();
   initAdminPanel();
+  initAttendanceLogin();
+  initAttendancePanel();
 
   initWindowChrome();
   initDesktopIcons();

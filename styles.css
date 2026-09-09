@@ -607,7 +607,22 @@ input, select, textarea{
 }
 #tray-weather{ display: flex; align-items: center; gap: .3rem; color: #fff; font-size: .56rem; }
 #tray-weather-icon{ font-size: .9rem; line-height: 1; }
-#tray-clock{ color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .02em; }
+#tray-clock{
+  color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .02em;
+  cursor: pointer; padding: .18rem .45rem .18rem .35rem;
+  border-radius: .18rem;
+  border-left: 1px solid rgba(255,255,255,.25);
+  display: flex; align-items: center; gap: .25rem;
+  transition: background .12s;
+}
+#tray-clock::after{
+  content: '\25B4'; font-size: .38rem; opacity: .75; line-height: 1;
+}
+#tray-clock:hover, #tray-clock:focus-visible{
+  background: rgba(255,255,255,.16);
+  outline: none;
+}
+#tray-clock:active{ background: rgba(0,0,0,.15); }
 
 /* =========================================================
    Адаптация под мобильные устройства (Pixel 9a)
@@ -909,4 +924,34 @@ input, select, textarea{
   .att-student-list{ max-height: 40dvh; }
   .att-student-list label{ min-height: 2rem; }
   .admin-att-actions .xp-tool-btn{ flex: 1 1 auto; min-height: 2rem; }
+}
+
+/* --- Отдельное окно "Журнал посещаемости" --- */
+.admin-section-hint{ font-size: .55rem; color: #6b7d9c; margin: 0 0 .4rem; line-height: 1.4; }
+#att-login p{ font-size: .55rem; color: #6b7d9c; margin: .1rem 0 .4rem; }
+#attendance-body{ padding: .6rem; }
+
+/* --- Журнал: снимок пары и история записей за дату --- */
+.att-meta{
+  font-size: .54rem; color: #48597a; background: #eef3fc;
+  border: 1px solid #cfdcf2; border-radius: .2rem;
+  padding: .3rem .45rem; margin-bottom: .35rem;
+}
+.att-history-block{ margin-top: .5rem; }
+.att-history-block h5{
+  font-size: .48rem; text-transform: uppercase; letter-spacing: .04em;
+  color: #6b7d9c; margin: 0 0 .25rem;
+}
+.att-history{ display: flex; flex-direction: column; gap: .2rem; max-height: 8rem; overflow-y: auto; }
+.att-history-empty{ font-size: .52rem; color: #9aa8c2; padding: .2rem 0; }
+.att-history-item{
+  text-align: left; font-size: .53rem; padding: .28rem .4rem;
+  background: #fff; border: 1px solid #dde5f5; border-radius: .2rem; cursor: pointer;
+}
+.att-history-item:hover{ background: var(--xp-blue-glow); }
+.att-history-count{ float: right; color: #6b7d9c; font-size: .48rem; }
+
+@media (max-width: 780px){
+  #tray-clock{ min-height: 2rem; padding: .3rem .55rem .3rem .4rem; }
+  .att-history-item{ min-height: 2rem; }
 }
