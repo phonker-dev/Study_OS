@@ -38,8 +38,34 @@ const LS_KEYS = {
   settings: 'rxp_settings',
   dayNotes: 'rxp_day_notes',
   memes: 'rxp_memes',
-  attendance: 'rxp_attendance'
+  attendance: 'rxp_attendance',
+  calendarPeriods: 'rxp_calendar_periods'
 };
+
+/* Периоды учебного года — показываются цветными «овалами» на датах
+   во всплывающем календаре. Это стартовые данные «на всякий случай»:
+   если Supabase не подключён или таблица calendar_periods ещё пуста,
+   календарь всё равно покажет актуальный график. Как только админ
+   один раз откроет Supabase-версию (см. supabase-schema.sql, там те
+   же данные заранее вставлены), сайт станет читать их оттуда. */
+const DEFAULT_PERIODS = [
+  { label: 'Теоретическое обучение', color: '#3a93ff', start: '2026-09-01', end: '2026-12-21' },
+  { label: 'Сессия',                 color: '#c0392b', start: '2026-12-22', end: '2026-12-28' },
+  { label: 'Каникулы',               color: '#e0a636', start: '2026-12-29', end: '2027-01-11' },
+  { label: 'Теоретическое обучение', color: '#3a93ff', start: '2027-02-12', end: '2027-05-17' },
+  { label: 'Производственная практика', color: '#3fa64a', start: '2027-05-18', end: '2027-06-14' },
+  { label: 'Сессия',                 color: '#c0392b', start: '2027-06-15', end: '2027-06-28' },
+  { label: 'Каникулы',               color: '#e0a636', start: '2027-06-29', end: '2027-08-31' }
+];
+
+const PERIOD_COLOR_PRESETS = [
+  { name: 'Синий (обучение)',  value: '#3a93ff' },
+  { name: 'Красный (сессия)',  value: '#c0392b' },
+  { name: 'Оранжевый (каникулы)', value: '#e0a636' },
+  { name: 'Зелёный (практика)', value: '#3fa64a' },
+  { name: 'Фиолетовый',        value: '#8e5bd8' },
+  { name: 'Розовый',           value: '#e0559e' }
+];
 
 const APP_WINDOW_IDS = {
   schedule: 'window-schedule',
@@ -174,6 +200,7 @@ const State = {
   zCounter: 100,
   openApps: new Set(),
   dayNotes: {},   // { mon: 'текст ДЗ', … } — общие для всех
+  calendarPeriods: [], // [{ label, color, start, end }] — сессии/каникулы/практика
   memes: [],      // [{ id, url, caption }]
   isAdmin: false,
   weather: null
@@ -288,6 +315,30 @@ const DB = {
     return res.data || [];
   },
 
+  /* Периоды календаря (сессия/каникулы/практика): читает кто угодно,
+     пишет только вошедший админ. */
+  async loadPeriods(){
+    if (!this.ready) return null;
+    const res = await this.client.from('calendar_periods')
+      .select('id, label, color, start_date, end_date').order('start_date');
+    if (res.error) throw res.error;
+    return res.data || [];
+  },
+  async addPeriod(period){
+    if (!this.ready) return null;
+    const res = await this.client.from('calendar_periods')
+      .insert([{ label: period.label, color: period.color, start_date: period.start, end_date: period.end }])
+      .select().single();
+    if (res.error) throw res.error;
+    return res.data;
+  },
+  async deletePeriod(id){
+    if (!this.ready) return false;
+    const res = await this.client.from('calendar_periods').delete().eq('id', id);
+    if (res.error) throw res.error;
+    return true;
+  },
+
   /* Права на запись: когда база общая, писать может только вошедший админ */
   async signInAdmin(password){
     if (!this.ready) return true;               // локальный режим — просто пускаем
@@ -380,6 +431,22 @@ async function loadDayNotes(){
   State.dayNotes = Store.load(LS_KEYS.dayNotes, {}) || {};
 }
 
+/* Периоды учебного года для календаря: БД → локальное сохранение →
+   встроенные дефолты (DEFAULT_PERIODS), чтобы календарь работал
+   правильно даже без единой настройки Supabase. */
+async function loadCalendarPeriods(){
+  try {
+    const remote = await DB.loadPeriods();
+    if (remote && remote.length){
+      State.calendarPeriods = remote.map(function(p){ return { id: p.id, label: p.label, color: p.color, start: p.start_date, end: p.end_date }; });
+      Store.save(LS_KEYS.calendarPeriods, State.calendarPeriods);
+      return;
+    }
+  } catch(e){ console.warn('Периоды календаря из БД недоступны:', e.message); }
+  const local = Store.load(LS_KEYS.calendarPeriods, null);
+  State.calendarPeriods = (local && local.length) ? local : DEFAULT_PERIODS.slice();
+}
+
 async function loadMemes(){
   try {
     const remote = await DB.loadMemes();
@@ -410,7 +477,7 @@ function showToast(text, isError){
    8. Часы в трее
    --------------------------------------------------------- */
 function tickClock(){
-  const el = $('tray-clock');
+  const el = $('tray-clock-time');
   if (el) el.textContent = formatTime24(now());
 }
 
@@ -761,6 +828,12 @@ async function fetchTraffic(){
    --------------------------------------------------------- */
 State.calendarViewDate = new Date();
 
+/* Периоды, покрывающие дату (обычно один, но на границах дат бывает
+   формально совпадение по краю — на этот случай возвращаем все). */
+function periodsForDate(dateStr){
+  return State.calendarPeriods.filter(function(p){ return dateStr >= p.start && dateStr <= p.end; });
+}
+
 function renderCalendarGrid(){
   const grid = $('cal-grid'); const label = $('cal-month-label');
   if (!grid || !label) return;
@@ -778,9 +851,11 @@ function renderCalendarGrid(){
   const gridStart = new Date(year, month, 1 - startOffset);
 
   grid.innerHTML = '';
+  const monthLabelsSeen = {};
   for (let i = 0; i < 42; i++){
     const cellDate = new Date(gridStart);
     cellDate.setDate(gridStart.getDate() + i);
+    const iso = formatIsoDate(cellDate);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'cal-cell';
@@ -788,10 +863,32 @@ function renderCalendarGrid(){
     if (cellDate.getTime() === today.getTime()) btn.classList.add('is-today');
     if (cellDate.getTime() === selected.getTime()) btn.classList.add('is-selected');
     if (cellDate.getDay() === 0 || cellDate.getDay() === 6) btn.classList.add('is-weekend');
+
+    const periods = periodsForDate(iso);
+    if (periods.length){
+      btn.classList.add('has-period');
+      btn.style.setProperty('--period-color', periods[0].color);
+      btn.title = periods.map(function(p){ return p.label; }).join(', ');
+      if (cellDate.getMonth() === month) monthLabelsSeen[periods[0].label] = periods[0].color;
+    }
+
     btn.textContent = cellDate.getDate();
     btn.addEventListener('click', function(){ selectCalendarDate(cellDate); });
     grid.appendChild(btn);
   }
+
+  renderCalendarLegend(monthLabelsSeen);
+}
+
+function renderCalendarLegend(labelsMap){
+  const legend = $('cal-legend');
+  if (!legend) return;
+  const entries = Object.keys(labelsMap);
+  if (!entries.length){ legend.innerHTML = ''; legend.classList.add('hidden'); return; }
+  legend.classList.remove('hidden');
+  legend.innerHTML = entries.map(function(label){
+    return '<span class="cal-legend-item"><span class="cal-legend-dot" style="background:' + labelsMap[label] + '"></span>' + escapeHtml(label) + '</span>';
+  }).join('');
 }
 
 /* Клик по дате в календаре двигает то же смещение, что и стрелки
@@ -1966,6 +2063,98 @@ function initAttendancePanel(){
   });
 }
 
+/* ---------------------------------------------------------
+   21c. Периоды календаря (сессия/каникулы/практика) — правит админ
+   --------------------------------------------------------- */
+function renderAdminPeriods(){
+  const list = $('admin-period-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!State.calendarPeriods.length){
+    list.innerHTML = '<li class="admin-period-empty">Периодов пока нет</li>';
+    return;
+  }
+  State.calendarPeriods
+    .slice()
+    .sort(function(a, b){ return a.start.localeCompare(b.start); })
+    .forEach(function(p){
+      const li = document.createElement('li');
+      li.innerHTML =
+        '<span class="admin-period-dot" style="background:' + escapeHtml(p.color) + '"></span>' +
+        '<span class="admin-period-text">' + escapeHtml(p.label) + ' &nbsp;<i>' +
+          formatDateHuman(p.start) + ' — ' + formatDateHuman(p.end) + '</i></span>' +
+        '<button type="button" class="admin-period-delete" title="Удалить">&#10005;</button>';
+      li.querySelector('.admin-period-delete').addEventListener('click', function(){
+        deleteCalendarPeriod(p);
+      });
+      list.appendChild(li);
+    });
+}
+
+function formatDateHuman(iso){
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
+}
+
+async function deleteCalendarPeriod(period){
+  State.calendarPeriods = State.calendarPeriods.filter(function(p){ return p !== period; });
+  Store.save(LS_KEYS.calendarPeriods, State.calendarPeriods);
+  renderAdminPeriods();
+  renderCalendarGrid();
+  if (DB.ready && period.id){
+    try { await DB.deletePeriod(period.id); }
+    catch(e){ showToast('Удалено только локально: ' + e.message, true); }
+  }
+}
+
+function initAdminPeriods(){
+  const colorSel = $('period-color');
+  if (colorSel && !colorSel.options.length){
+    PERIOD_COLOR_PRESETS.forEach(function(c){
+      const opt = document.createElement('option');
+      opt.value = c.value; opt.textContent = c.name;
+      colorSel.appendChild(opt);
+    });
+  }
+  renderAdminPeriods();
+
+  const addBtn = $('period-add');
+  if (!addBtn) return;
+  addBtn.addEventListener('click', async function(){
+    const label = $('period-label').value.trim();
+    const color = $('period-color').value;
+    const start = $('period-start').value;
+    const end = $('period-end').value;
+    if (!label || !start || !end){ showToast('Заполните название и обе даты', true); return; }
+    if (end < start){ showToast('Дата конца раньше даты начала', true); return; }
+
+    const period = { label: label, color: color, start: start, end: end };
+    addBtn.disabled = true;
+    if (DB.ready){
+      try {
+        const saved = await DB.addPeriod(period);
+        period.id = saved.id;
+        showToast('Период сохранён в общей базе');
+      } catch(e){
+        showToast('Сохранено только локально: ' + e.message, true);
+      }
+    } else {
+      showToast('Период сохранён локально');
+    }
+    addBtn.disabled = false;
+
+    State.calendarPeriods.push(period);
+    Store.save(LS_KEYS.calendarPeriods, State.calendarPeriods);
+    renderAdminPeriods();
+    renderCalendarGrid();
+
+    $('period-label').value = '';
+    $('period-start').value = '';
+    $('period-end').value = '';
+  });
+}
+
 function setAdminMode(on){
   State.isAdmin = on;
   const loginDiv = $('admin-login');
@@ -2030,6 +2219,8 @@ function initAdminPanel(){
 
   const openAtt = $('admin-open-attendance');
   if (openAtt) openAtt.addEventListener('click', function(){ openApp('attendance'); });
+
+  initAdminPeriods();
 
   const sync = $('admin-sync-schedule');
   if (sync) sync.addEventListener('click', async function(){
@@ -2393,7 +2584,7 @@ async function init(){
   const hadSession = await DB.restoreSession();
 
   await loadInitialSchedule();
-  await Promise.all([loadDayNotes(), loadMemes()]);
+  await Promise.all([loadDayNotes(), loadMemes(), loadCalendarPeriods()]);
 
   State.scheduleActiveParity = getParityForDate(now());
 
