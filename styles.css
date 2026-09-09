@@ -609,20 +609,25 @@ input, select, textarea{
 #tray-weather-icon{ font-size: .9rem; line-height: 1; }
 #tray-clock{
   color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .02em;
-  cursor: pointer; padding: .18rem .45rem .18rem .35rem;
-  border-radius: .18rem;
-  border-left: 1px solid rgba(255,255,255,.25);
-  display: flex; align-items: center; gap: .25rem;
-  transition: background .12s;
+  cursor: pointer; padding: .22rem .5rem .22rem .4rem;
+  border-radius: .25rem;
+  background: linear-gradient(180deg, #2f74e0, #1a52b8);
+  border: 1px solid #0a3491;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+  display: flex; align-items: center; gap: .3rem;
+  transition: filter .1s, box-shadow .1s, transform .05s;
 }
-#tray-clock::after{
-  content: '\25B4'; font-size: .38rem; opacity: .75; line-height: 1;
-}
+.tray-clock-icon{ width: 1.05rem; height: 1.05rem; flex-shrink: 0; }
 #tray-clock:hover, #tray-clock:focus-visible{
-  background: rgba(255,255,255,.16);
+  filter: brightness(1.18);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 0 0 2px rgba(255,255,255,.25);
   outline: none;
 }
-#tray-clock:active{ background: rgba(0,0,0,.15); }
+#tray-clock:active{
+  filter: brightness(.85);
+  box-shadow: inset 0 .12rem .25rem rgba(0,0,0,.55);
+  transform: translateY(1px);
+}
 
 /* =========================================================
    Адаптация под мобильные устройства (Pixel 9a)
@@ -954,4 +959,43 @@ input, select, textarea{
 @media (max-width: 780px){
   #tray-clock{ min-height: 2rem; padding: .3rem .55rem .3rem .4rem; }
   .att-history-item{ min-height: 2rem; }
+}
+
+/* --- Цветные периоды на календаре (сессия/каникулы/практика) --- */
+.cal-cell.has-period{
+  background: var(--period-color); color: #fff; border-radius: 50%; font-weight: 700;
+}
+.cal-cell.has-period.is-outside{ opacity: .5; }
+.cal-cell.is-selected{ background: var(--xp-blue-mid) !important; color: #fff !important; border-radius: .2rem !important; }
+.cal-cell.is-today{ box-shadow: inset 0 0 0 2px #fff; }
+
+.cal-legend{ display: flex; flex-wrap: wrap; gap: .3rem .5rem; margin: .35rem 0 0; font-size: .46rem; }
+.cal-legend-item{ display: inline-flex; align-items: center; gap: .18rem; color: var(--xp-text); }
+.cal-legend-dot{ width: .45rem; height: .45rem; border-radius: 50%; display: inline-block; }
+
+/* --- Админка: форма и список периодов --- */
+.admin-period-form{
+  display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; margin-bottom: .4rem;
+}
+.admin-period-form input[type="text"]{ flex: 1 1 8rem; min-width: 7rem; }
+.admin-period-form select{ font-size: .55rem; }
+.admin-period-form label{ display: flex; align-items: center; gap: .2rem; font-size: .5rem; color: #48597a; }
+.admin-period-list{ list-style: none; margin: 0; padding: 0; }
+.admin-period-list li{
+  display: flex; align-items: center; gap: .35rem;
+  padding: .25rem .3rem; border-bottom: 1px solid #eef2fa; font-size: .53rem;
+}
+.admin-period-list li:last-child{ border-bottom: none; }
+.admin-period-dot{ width: .55rem; height: .55rem; border-radius: 50%; flex-shrink: 0; }
+.admin-period-text{ flex: 1; }
+.admin-period-text i{ color: #6b7d9c; font-style: normal; font-size: .48rem; }
+.admin-period-delete{
+  background: none; border: none; color: #b5562f; cursor: pointer; font-size: .55rem; padding: .1rem .3rem;
+}
+.admin-period-empty{ font-size: .52rem; color: #9aa8c2; padding: .2rem 0; }
+
+@media (max-width: 780px){
+  .admin-period-form{ flex-direction: column; align-items: stretch; }
+  .admin-period-form input, .admin-period-form select{ min-height: 2rem; font-size: .68rem; }
+  .admin-period-list li{ min-height: 2rem; }
 }
