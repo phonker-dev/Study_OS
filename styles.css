@@ -603,7 +603,7 @@ input, select, textarea{
 #system-tray{
   display: flex; align-items: center; gap: .5rem;
   background: #1147b8; border: 1px solid #0a3491; border-radius: .3rem .0 .0 .3rem;
-  padding: 0 .6rem; height: 1.9rem;
+  padding: 0 0 0 .6rem; height: 1.9rem;
 }
 #tray-weather{ display: flex; align-items: center; gap: .3rem; color: #fff; font-size: .56rem; }
 #tray-weather-icon{ font-size: .9rem; line-height: 1; }
@@ -998,4 +998,25 @@ input, select, textarea{
   .admin-period-form{ flex-direction: column; align-items: stretch; }
   .admin-period-form input, .admin-period-form select{ min-height: 2rem; font-size: .68rem; }
   .admin-period-list li{ min-height: 2rem; }
+}
+
+/* --- Сводка по группе в журнале посещаемости --- */
+.att-summary-block{ margin-top: .5rem; }
+.att-summary-block h5{
+  font-size: .48rem; text-transform: uppercase; letter-spacing: .04em;
+  color: #6b7d9c; margin: 0 0 .25rem;
+}
+.att-summary-actions{ display: flex; gap: .35rem; margin-bottom: .35rem; flex-wrap: wrap; }
+.att-summary-loading, .att-summary-empty{ font-size: .52rem; color: #9aa8c2; padding: .2rem 0; }
+table.att-summary{ width: 100%; border-collapse: collapse; font-size: .52rem; }
+table.att-summary th, table.att-summary td{
+  padding: .22rem .3rem; border-bottom: 1px solid #eef2fa; text-align: left;
+}
+table.att-summary th{ color: #6b7d9c; font-size: .46rem; text-transform: uppercase; }
+table.att-summary tr.is-bad td{ color: #a3241a; }
+table.att-summary tr.is-mid td{ color: #8a5c00; }
+table.att-summary tr.is-good td{ color: #217a34; }
+
+@media (max-width: 780px){
+  .att-summary-actions .xp-tool-btn{ flex: 1 1 auto; min-height: 2rem; }
 }
