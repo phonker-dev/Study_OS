@@ -150,6 +150,12 @@
         <label>Преподаватель
           <input type="text" id="lf-teacher">
         </label>
+        <label>Заметка / домашнее задание к этой паре
+          <textarea id="lf-note" rows="3" placeholder="Например: подготовить конспект гл. 4"></textarea>
+        </label>
+        <label>Срок сдачи (необязательно)
+          <input type="date" id="lf-due">
+        </label>
         <div class="xp-form-actions">
           <button type="submit" class="xp-button primary">Сохранить</button>
           <button type="button" class="xp-button" id="lf-cancel">Отмена</button>
@@ -358,15 +364,41 @@
       <div id="admin-panel" style="display:none;">
         <div class="admin-section">
           <h4>Редактирование расписания</h4>
-          <p>Используйте окно «Расписание» для изменений, все сохраняется в БД.</p>
+          <p>Пары, заметки/ДЗ и сроки сдачи редактируются прямо в окне «Расписание» — откройте пару и заполните поле «Заметка / ДЗ». Всё сохраняется в общую БД.</p>
           <button class="xp-tool-btn" id="admin-sync-schedule">Синхронизировать с БД</button>
         </div>
         <div class="admin-section">
-          <h4>Общие заметки (ДЗ) к дням</h4>
-          <div id="admin-notes-container">
-            <!-- Здесь будут поля для ввода заметок по дням -->
+          <h4>Электронный журнал (посещаемость)</h4>
+          <p>Видно и редактируется только старостой. Выберите день, четность и пару — список группы подтянется автоматически.</p>
+          <div class="admin-att-controls">
+            <label>Дата
+              <input type="date" id="att-date">
+            </label>
+            <label>Неделя
+              <select id="att-parity">
+                <option value="even">Чётная</option>
+                <option value="odd">Нечётная</option>
+              </select>
+            </label>
+            <label>День
+              <select id="att-day">
+                <option value="mon">Понедельник</option>
+                <option value="tue">Вторник</option>
+                <option value="wed">Среда</option>
+                <option value="thu">Четверг</option>
+                <option value="fri">Пятница</option>
+                <option value="sat">Суббота</option>
+              </select>
+            </label>
+            <label>Пара
+              <select id="att-lesson"></select>
+            </label>
           </div>
-          <button class="xp-tool-btn" id="admin-save-notes">Сохранить заметки</button>
+          <div class="admin-att-actions">
+            <button class="xp-tool-btn" id="att-mark-all">Отметить всех присутствующими</button>
+            <button class="xp-tool-btn primary" id="att-save">Сохранить посещаемость</button>
+          </div>
+          <ul id="att-student-list" class="att-student-list"></ul>
         </div>
         <div class="admin-section">
           <h4>Управление мемами (Щитпост)</h4>
@@ -466,9 +498,28 @@
         <span id="tray-weather-icon"></span>
         <span id="tray-weather-temp">--°C</span>
       </div>
-      <div id="tray-clock">00:00</div>
+      <div id="tray-clock"></div>
     </div>
   </div>
+
+  <!-- Всплывающий календарь (клик по часам), Win11-расположение / Win XP оформление -->
+  <div id="calendar-popup" class="hidden">
+    <div class="cal-header">
+      <span class="cal-title">Календарь</span>
+      <button id="cal-close" class="cal-close" title="Закрыть">&#10005;</button>
+    </div>
+    <div class="cal-nav">
+      <button id="cal-prev" class="cal-nav-btn" title="Предыдущий месяц">&#9664;</button>
+      <span id="cal-month-label"></span>
+      <button id="cal-next" class="cal-nav-btn" title="Следующий месяц">&#9654;</button>
+    </div>
+    <div class="cal-weekdays">
+      <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <button id="cal-today" class="xp-tool-btn cal-today-btn">Сегодня</button>
+  </div>
+  <div id="calendar-overlay" class="hidden"></div>
 
 </div>
 

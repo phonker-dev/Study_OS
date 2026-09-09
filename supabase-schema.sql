@@ -121,6 +121,31 @@ create policy "memes files admin delete"
 
 
 -- ---------------------------------------------------------
+-- 4b. Посещаемость (электронный журнал старосты)
+--     Один ряд = одна пара в конкретный день. present — jsonb-массив
+--     ФИО присутствовавших. В ОТЛИЧИЕ от остальных таблиц читать это
+--     могут ТОЛЬКО authenticated (вошедший в админку староста) —
+--     обычным посетителям сайта эти данные не видны вообще.
+-- ---------------------------------------------------------
+create table if not exists public.attendance (
+  lesson_id   text        not null,
+  lesson_date date        not null,
+  present     jsonb       not null default '[]'::jsonb,
+  updated_at  timestamptz not null default now(),
+  primary key (lesson_id, lesson_date)
+);
+
+alter table public.attendance enable row level security;
+
+drop policy if exists "attendance admin only" on public.attendance;
+
+create policy "attendance admin only"
+  on public.attendance for all
+  to authenticated
+  using (true) with check (true);
+
+
+-- ---------------------------------------------------------
 -- 5. Стартовые данные (пустые заметки на все учебные дни)
 -- ---------------------------------------------------------
 insert into public.day_notes (day_key, note_text)

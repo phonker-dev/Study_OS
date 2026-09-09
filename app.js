@@ -19,12 +19,26 @@ const DAY_LABELS = { mon: 'Понедельник', tue: 'Вторник', wed: 
 const MONTH_NAMES = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const SCHOOL_DAY_KEYS = ['mon','tue','wed','thu','fri','sat'];
 
+/* Список группы для журнала посещаемости — виден и редактируется только старостой (админом) */
+const GROUP_STUDENTS = [
+  'Анисимова Алёна Николаевна', 'Березикова Виктория Сергеевна', 'Блинов Артем',
+  'Боженков Никита Андреевич', 'Валеева Валерия Константиновна', 'Вьюкова Александра Сергеевна',
+  'Гаврилова Ксения Николаевна', 'Ильина Милена Владимировна', 'Колосова Евгения Сергеевна',
+  'Колядин Сергей Дмитриевич', 'Кочуров Алексей Витальевич', 'Кузьмин Егор Алексеевич',
+  'Мироненко Артём Андреевич', 'Морозова Анастасия Андреевна', 'Натальина Елизавета Артёмовна',
+  'Николаева Маргарита Евгеньевна', 'Подгорнова Вероника Александровна', 'Позднякова Валерия Валерьевна',
+  'Рыжов Тимофей Евгеньевич', 'Самсон Карина Александровна', 'Семенов Денис Максимович',
+  'Синицина Владислава Игоревна', 'Ткач Дмитрий Александрович', 'Черноиванова Арина Ивановна',
+  'Шишкин Иван Владимирович', 'Щапова Алина Викторовна', 'Ющук Юлия Юрьевна'
+];
+
 const LS_KEYS = {
   schedule: 'rxp_schedule',
   notes: 'rxp_notes',
   settings: 'rxp_settings',
   dayNotes: 'rxp_day_notes',
-  memes: 'rxp_memes'
+  memes: 'rxp_memes',
+  attendance: 'rxp_attendance'
 };
 
 const APP_WINDOW_IDS = {
@@ -55,6 +69,7 @@ function $(id){ return document.getElementById(id); }
 function pad2(n){ return String(n).padStart(2, '0'); }
 function formatTime24(date){ return pad2(date.getHours()) + ':' + pad2(date.getMinutes()); }
 function formatDateFull(date){ return date.getDate() + ' ' + MONTH_NAMES[date.getMonth()]; }
+function formatIsoDate(date){ return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()); }
 function escapeHtml(str){
   return String(str == null ? '' : str)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -130,7 +145,9 @@ function normalizeSchedule(raw){
               id: l.id || uid('lesson'),
               start: l.start || '09:00', end: l.end || '10:30',
               type: l.type === 'lecture' ? 'lecture' : 'seminar',
-              subject: String(l.subject), room: l.room || '', teacher: l.teacher || ''
+              subject: String(l.subject), room: l.room || '', teacher: l.teacher || '',
+              note: l.note || '',      // ДЗ / заметка к конкретной паре
+              due: l.due || ''         // дата сдачи ДЗ, необязательно (YYYY-MM-DD)
             };
           });
       }
@@ -230,6 +247,26 @@ const DB = {
       .upload(path, file, { cacheControl: '3600', upsert: false });
     if (up.error) throw up.error;
     return this.client.storage.from('memes').getPublicUrl(path).data.publicUrl;
+  },
+
+  /* Посещаемость: и чтение, и запись доступны только вошедшему старосте
+     (RLS в supabase-schema.sql разрешает select/insert/update/delete
+     только роли authenticated — анонимный ключ ничего не увидит). */
+  async loadAttendance(lessonId, date){
+    if (!this.ready) return null;
+    const res = await this.client.from('attendance')
+      .select('present').eq('lesson_id', lessonId).eq('lesson_date', date).maybeSingle();
+    if (res.error) throw res.error;
+    return res.data ? res.data.present : null;
+  },
+  async saveAttendance(lessonId, date, presentList){
+    if (!this.ready) return false;
+    const res = await this.client.from('attendance').upsert({
+      lesson_id: lessonId, lesson_date: date, present: presentList,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'lesson_id,lesson_date' });
+    if (res.error) throw res.error;
+    return true;
   },
 
   /* Права на запись: когда база общая, писать может только вошедший админ */
@@ -700,6 +737,105 @@ async function fetchTraffic(){
   }
 }
 
+/* ---------------------------------------------------------
+   11b. Всплывающий календарь (клик по часам в трее)
+   --------------------------------------------------------- */
+State.calendarViewDate = new Date();
+
+function renderCalendarGrid(){
+  const grid = $('cal-grid'); const label = $('cal-month-label');
+  if (!grid || !label) return;
+
+  const view = State.calendarViewDate;
+  const year = view.getFullYear(); const month = view.getMonth();
+  label.textContent = MONTH_NAMES[month].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + year;
+
+  const today = now(); today.setHours(0,0,0,0);
+  const selected = getDisplayedDate(); selected.setHours(0,0,0,0);
+
+  const firstOfMonth = new Date(year, month, 1);
+  // Понедельник = 0 … воскресенье = 6
+  const startOffset = (firstOfMonth.getDay() + 6) % 7;
+  const gridStart = new Date(year, month, 1 - startOffset);
+
+  grid.innerHTML = '';
+  for (let i = 0; i < 42; i++){
+    const cellDate = new Date(gridStart);
+    cellDate.setDate(gridStart.getDate() + i);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cal-cell';
+    if (cellDate.getMonth() !== month) btn.classList.add('is-outside');
+    if (cellDate.getTime() === today.getTime()) btn.classList.add('is-today');
+    if (cellDate.getTime() === selected.getTime()) btn.classList.add('is-selected');
+    if (cellDate.getDay() === 0 || cellDate.getDay() === 6) btn.classList.add('is-weekend');
+    btn.textContent = cellDate.getDate();
+    btn.addEventListener('click', function(){ selectCalendarDate(cellDate); });
+    grid.appendChild(btn);
+  }
+}
+
+/* Клик по дате в календаре двигает то же смещение, что и стрелки
+   виджета, и открывает расписание на нужной чётности/дне. */
+function selectCalendarDate(date){
+  const today = now(); today.setHours(0,0,0,0);
+  const target = new Date(date); target.setHours(0,0,0,0);
+  State.widgetOffsetDays = Math.round((target - today) / 86400000);
+  renderWidget();
+
+  State.scheduleActiveParity = getParityForDate(target);
+  syncScheduleTabs();
+  renderScheduleWindow();
+  openApp('schedule');
+  closeCalendarPopup();
+}
+
+function openCalendarPopup(){
+  const popup = $('calendar-popup'); const overlay = $('calendar-overlay');
+  if (!popup) return;
+  State.calendarViewDate = new Date(getDisplayedDate());
+  renderCalendarGrid();
+  popup.classList.remove('hidden');
+  if (overlay) overlay.classList.remove('hidden');
+}
+function closeCalendarPopup(){
+  const popup = $('calendar-popup'); const overlay = $('calendar-overlay');
+  if (popup) popup.classList.add('hidden');
+  if (overlay) overlay.classList.add('hidden');
+}
+function toggleCalendarPopup(){
+  const popup = $('calendar-popup');
+  if (!popup) return;
+  if (popup.classList.contains('hidden')) openCalendarPopup(); else closeCalendarPopup();
+}
+
+function initCalendarPopup(){
+  const trayClock = $('tray-clock');
+  if (trayClock) trayClock.addEventListener('click', function(e){ e.stopPropagation(); toggleCalendarPopup(); });
+
+  const closeBtn = $('cal-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeCalendarPopup);
+  const overlay = $('calendar-overlay');
+  if (overlay) overlay.addEventListener('click', closeCalendarPopup);
+
+  const prev = $('cal-prev'); const next = $('cal-next');
+  if (prev) prev.addEventListener('click', function(){
+    State.calendarViewDate = new Date(State.calendarViewDate.getFullYear(), State.calendarViewDate.getMonth() - 1, 1);
+    renderCalendarGrid();
+  });
+  if (next) next.addEventListener('click', function(){
+    State.calendarViewDate = new Date(State.calendarViewDate.getFullYear(), State.calendarViewDate.getMonth() + 1, 1);
+    renderCalendarGrid();
+  });
+
+  const todayBtn = $('cal-today');
+  if (todayBtn) todayBtn.addEventListener('click', function(){ selectCalendarDate(now()); });
+
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') closeCalendarPopup();
+  });
+}
+
 function initWeatherWindow(){
   const wr = $('weather-refresh');
   if (wr) wr.addEventListener('click', fetchWeather);
@@ -752,6 +888,7 @@ function renderWidget(){
     lessons.forEach(function(lesson){
       const item = document.createElement('div');
       item.className = 'widget-lesson type-' + lesson.type;
+      const hasNote = (lesson.note || '').trim();
       item.innerHTML =
         '<div class="widget-lesson-time">' + escapeHtml(lesson.start) + '—' + escapeHtml(lesson.end) + '</div>' +
         '<div class="widget-lesson-subject">' + escapeHtml(lesson.subject) + '</div>' +
@@ -759,18 +896,13 @@ function renderWidget(){
           escapeHtml(lesson.room || '') +
           (lesson.room && lesson.teacher ? ' · ' : '') +
           escapeHtml(lesson.teacher || '') +
-        '</div>';
+        '</div>' +
+        (hasNote || lesson.due
+          ? '<div class="widget-hw"><span class="widget-hw-label">ДЗ</span> ' +
+              escapeHtml(hasNote || '—') + renderDueBadge(lesson.due) + '</div>'
+          : '');
       listEl.appendChild(item);
     });
-  }
-
-  // Общее ДЗ на этот день — видно всем
-  const hw = (State.dayNotes[dayKey] || '').trim();
-  if (hw){
-    const note = document.createElement('div');
-    note.className = 'widget-hw';
-    note.innerHTML = '<span class="widget-hw-label">ДЗ</span> ' + escapeHtml(hw);
-    listEl.appendChild(note);
   }
 }
 
@@ -832,15 +964,20 @@ function renderScheduleWindow(){
   if (!container) return;
   container.innerHTML = '';
 
-  const today = now();
-  const todayKey = dayKeyForDate(today);
-  const todayParity = getParityForDate(today);
+  // «Выбранный» день — тот же, что показан в виджете на рабочем столе
+  // (стрелки виджета и клик по календарю двигают одно и то же смещение)
+  const focused = getDisplayedDate();
+  const focusedKey = dayKeyForDate(focused);
+  const focusedParity = getParityForDate(focused);
+  const isRealToday = State.widgetOffsetDays === 0;
   const editable = canEdit();
 
   SCHOOL_DAY_KEYS.forEach(function(dayKey){
     const col = document.createElement('div');
     col.className = 'schedule-day-col';
-    if (dayKey === todayKey && State.scheduleActiveParity === todayParity) col.classList.add('is-today');
+    if (dayKey === focusedKey && State.scheduleActiveParity === focusedParity){
+      col.classList.add(isRealToday ? 'is-today' : 'is-focused');
+    }
 
     const title = document.createElement('div');
     title.className = 'schedule-day-title';
@@ -871,6 +1008,8 @@ function renderScheduleWindow(){
     lessons.forEach(function(lesson){
       const card = document.createElement('div');
       card.className = 'lesson-card type-' + lesson.type;
+      const hasNote = (lesson.note || '').trim();
+      const dueBadge = lesson.due ? renderDueBadge(lesson.due) : '';
       card.innerHTML =
         (editable
           ? '<div class="lc-actions">' +
@@ -882,7 +1021,12 @@ function renderScheduleWindow(){
           '<span class="lc-badge">' + (lesson.type === 'lecture' ? 'Лекция' : 'Семинар') + '</span></div>' +
         '<div class="lc-subject">' + escapeHtml(lesson.subject) + '</div>' +
         '<div class="lc-meta">' + escapeHtml(lesson.room || '') +
-          (lesson.room && lesson.teacher ? ' · ' : '') + escapeHtml(lesson.teacher || '') + '</div>';
+          (lesson.room && lesson.teacher ? ' · ' : '') + escapeHtml(lesson.teacher || '') + '</div>' +
+        (hasNote || dueBadge
+          ? '<div class="lc-note">' +
+              '<span class="lc-note-label">ДЗ</span> ' + escapeHtml(hasNote || '—') + dueBadge +
+            '</div>'
+          : '');
       if (editable){
         card.querySelector('.lc-edit').addEventListener('click', function(){
           openLessonForm(lesson, State.scheduleActiveParity, dayKey);
@@ -896,55 +1040,23 @@ function renderScheduleWindow(){
       col.appendChild(card);
     });
 
-    // Общее домашнее задание на день
-    const noteText = (State.dayNotes[dayKey] || '').trim();
-    const note = document.createElement('div');
-    note.className = 'day-note' + (noteText ? '' : ' is-empty');
-    note.innerHTML =
-      '<div class="day-note-head">' +
-        '<span class="day-note-label">Домашнее задание</span>' +
-        (State.isAdmin ? '<button type="button" class="day-note-edit" title="Изменить ДЗ">&#9998;</button>' : '') +
-      '</div>' +
-      '<div class="day-note-content">' + (noteText ? escapeHtml(noteText) : '<i>не задано</i>') + '</div>';
-    if (State.isAdmin){
-      note.querySelector('.day-note-edit').addEventListener('click', function(){
-        editDayNote(dayKey);
-      });
-    }
-    col.appendChild(note);
-
     container.appendChild(col);
   });
 }
 
 /* ---------------------------------------------------------
-   14. Общее ДЗ (видно всем, правит админ)
+   14. ДЗ / заметки к конкретной паре (редактируются в форме пары,
+       см. openLessonForm / initLessonForm — поля lf-note / lf-due)
    --------------------------------------------------------- */
-/* redrawAdmin=false, когда правка пришла из самих полей админки:
-   перерисовка там пересоздала бы инпуты и стёрла ещё не прочитанные значения. */
-async function setDayNote(dayKey, text, redrawAdmin){
-  State.dayNotes[dayKey] = text;
-  Store.save(LS_KEYS.dayNotes, State.dayNotes);
-  if (DB.ready){
-    try { await DB.saveDayNote(dayKey, text); }
-    catch(e){ showToast('ДЗ сохранено только локально: ' + e.message, true); }
-  }
-  renderScheduleWindow();
-  renderWidget();
-  if (redrawAdmin !== false) renderAdminNotes();
-}
-
-function editDayNote(dayKey){
-  const current = State.dayNotes[dayKey] || '';
-  const next = window.prompt('Домашнее задание на ' + DAY_LABELS[dayKey].toLowerCase() + ':', current);
-  if (next === null) return;
-  setDayNote(dayKey, next.trim());
-}
-
-async function refreshDayNotes(){
-  await loadDayNotes();
-  renderScheduleWindow();
-  renderWidget();
+function renderDueBadge(due){
+  if (!due) return '';
+  const today = now(); today.setHours(0,0,0,0);
+  const dueDate = new Date(due + 'T00:00:00');
+  if (isNaN(dueDate.getTime())) return '';
+  const diffDays = Math.round((dueDate - today) / 86400000);
+  let cls = 'lc-due';
+  if (diffDays < 0) cls += ' overdue'; else if (diffDays <= 2) cls += ' soon';
+  return '<span class="' + cls + '">до ' + escapeHtml(formatDateFull(dueDate)) + '</span>';
 }
 
 /* ---------------------------------------------------------
@@ -962,6 +1074,8 @@ function openLessonForm(lesson, parity, dayKey){
   $('lf-subject').value = lesson ? lesson.subject : '';
   $('lf-room').value = lesson ? (lesson.room || '') : '';
   $('lf-teacher').value = lesson ? (lesson.teacher || '') : '';
+  if ($('lf-note')) $('lf-note').value = lesson ? (lesson.note || '') : '';
+  if ($('lf-due')) $('lf-due').value = lesson ? (lesson.due || '') : '';
   openApp('lesson-form');
   setTimeout(function(){ $('lf-subject').focus(); }, 60);
 }
@@ -989,7 +1103,9 @@ function initLessonForm(){
       type: $('lf-type').value,
       subject: $('lf-subject').value.trim(),
       room: $('lf-room').value.trim(),
-      teacher: $('lf-teacher').value.trim()
+      teacher: $('lf-teacher').value.trim(),
+      note: ($('lf-note') ? $('lf-note').value.trim() : ''),
+      due: ($('lf-due') ? $('lf-due').value : '')
     };
     if (!lesson.subject){ showToast('Укажите дисциплину', true); return; }
 
@@ -1555,23 +1671,6 @@ function initShitpost(){
 /* ---------------------------------------------------------
    21. Админ-панель
    --------------------------------------------------------- */
-function renderAdminNotes(){
-  const container = $('admin-notes-container');
-  if (!container) return;
-  container.innerHTML = '';
-  SCHOOL_DAY_KEYS.forEach(function(dayKey){
-    const label = document.createElement('label');
-    label.innerHTML = '<span>' + DAY_LABELS[dayKey] + ':</span>';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.id = 'admin-note-' + dayKey;
-    input.placeholder = 'Домашнее задание…';
-    input.value = State.dayNotes[dayKey] || '';
-    label.appendChild(input);
-    container.appendChild(label);
-  });
-}
-
 function renderAdminMemes(){
   const list = $('admin-meme-list');
   if (!list) return;
@@ -1601,6 +1700,118 @@ function renderAdminMemes(){
   });
 }
 
+/* ---------------------------------------------------------
+   21b. Электронный журнал посещаемости (только для старосты)
+   --------------------------------------------------------- */
+State.attendance = {}; // { present: [...фио...] } для текущей выбранной пары/даты
+
+function attendanceLocalKey(lessonId, date){ return lessonId + '|' + date; }
+
+/* Список пар выбранного дня/четности в select #att-lesson */
+function initAttendanceLessonOptions(){
+  const daySel = $('att-day'); const paritySel = $('att-parity'); const lessonSel = $('att-lesson');
+  if (!daySel || !paritySel || !lessonSel) return;
+  const dayKey = daySel.value; const parity = paritySel.value;
+  const lessons = ((State.schedule[parity] || {})[dayKey] || [])
+    .slice().sort(function(a, b){ return a.start.localeCompare(b.start); });
+  lessonSel.innerHTML = '';
+  if (!lessons.length){
+    lessonSel.innerHTML = '<option value="">Пар нет</option>';
+    return;
+  }
+  lessons.forEach(function(lesson){
+    const opt = document.createElement('option');
+    opt.value = lesson.id;
+    opt.textContent = lesson.start + ' — ' + lesson.subject;
+    lessonSel.appendChild(opt);
+  });
+}
+
+function renderAttendanceList(presentSet){
+  const list = $('att-student-list');
+  if (!list) return;
+  list.innerHTML = '';
+  GROUP_STUDENTS.forEach(function(name){
+    const li = document.createElement('li');
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = presentSet.has(name);
+    cb.dataset.student = name;
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + name));
+    li.appendChild(label);
+    list.appendChild(li);
+  });
+}
+
+async function loadAttendanceForSelection(){
+  const lessonSel = $('att-lesson'); const dateInput = $('att-date');
+  if (!lessonSel || !dateInput || !lessonSel.value) { renderAttendanceList(new Set()); return; }
+  const lessonId = lessonSel.value; const date = dateInput.value || formatIsoDate(now());
+  const key = attendanceLocalKey(lessonId, date);
+
+  let present = Store.load(LS_KEYS.attendance, {})[key];
+  if (DB.ready){
+    try {
+      const remote = await DB.loadAttendance(lessonId, date);
+      if (remote) present = remote;
+    } catch(e){ showToast('Журнал загружен только локально: ' + e.message, true); }
+  }
+  renderAttendanceList(new Set(present || []));
+}
+
+function initAttendancePanel(){
+  const dateInput = $('att-date'); const paritySel = $('att-parity');
+  const daySel = $('att-day'); const lessonSel = $('att-lesson');
+  const markAllBtn = $('att-mark-all'); const saveBtn = $('att-save');
+  if (!dateInput) return;
+
+  const today = now();
+  dateInput.value = formatIsoDate(today);
+  paritySel.value = getParityForDate(today);
+  daySel.value = dayKeyForDate(today) === 'sun' ? 'mon' : dayKeyForDate(today);
+
+  initAttendanceLessonOptions();
+  loadAttendanceForSelection();
+
+  [paritySel, daySel].forEach(function(el){
+    el.addEventListener('change', function(){
+      initAttendanceLessonOptions();
+      loadAttendanceForSelection();
+    });
+  });
+  lessonSel.addEventListener('change', loadAttendanceForSelection);
+  dateInput.addEventListener('change', loadAttendanceForSelection);
+
+  if (markAllBtn) markAllBtn.addEventListener('click', function(){
+    document.querySelectorAll('#att-student-list input[type=checkbox]').forEach(function(cb){ cb.checked = true; });
+  });
+
+  if (saveBtn) saveBtn.addEventListener('click', async function(){
+    if (!lessonSel.value){ showToast('Нет пары для выбранного дня', true); return; }
+    const present = Array.from(document.querySelectorAll('#att-student-list input[type=checkbox]:checked'))
+      .map(function(cb){ return cb.dataset.student; });
+    const key = attendanceLocalKey(lessonSel.value, dateInput.value);
+    const all = Store.load(LS_KEYS.attendance, {});
+    all[key] = present;
+    Store.save(LS_KEYS.attendance, all);
+
+    if (DB.ready){
+      saveBtn.disabled = true;
+      try {
+        await DB.saveAttendance(lessonSel.value, dateInput.value, present);
+        showToast('Посещаемость сохранена в общей базе');
+      } catch(e){
+        showToast('Сохранено только локально: ' + e.message, true);
+      }
+      saveBtn.disabled = false;
+    } else {
+      showToast('Посещаемость сохранена локально');
+    }
+  });
+}
+
 function setAdminMode(on){
   State.isAdmin = on;
   const loginDiv = $('admin-login');
@@ -1612,7 +1823,7 @@ function setAdminMode(on){
   document.body.classList.toggle('is-admin', on);
   renderScheduleWindow();
   renderShitpostGallery();
-  if (on){ renderAdminNotes(); renderAdminMemes(); }
+  if (on){ renderAdminMemes(); initAttendanceLessonOptions(); loadAttendanceForSelection(); }
 }
 
 function initAdminPanel(){
@@ -1673,23 +1884,7 @@ function initAdminPanel(){
     sync.disabled = false;
   });
 
-  const saveNotesBtn = $('admin-save-notes');
-  if (saveNotesBtn) saveNotesBtn.addEventListener('click', async function(){
-    // Сначала считываем ВСЕ поля, и только потом сохраняем: иначе
-    // перерисовка после первого дня уничтожит остальные инпуты.
-    const values = SCHOOL_DAY_KEYS.map(function(dayKey){
-      const input = $('admin-note-' + dayKey);
-      return { dayKey: dayKey, text: input ? input.value.trim() : '' };
-    });
-
-    saveNotesBtn.disabled = true;
-    for (let i = 0; i < values.length; i++){
-      await setDayNote(values[i].dayKey, values[i].text, false);
-    }
-    saveNotesBtn.disabled = false;
-    renderAdminNotes();
-    showToast('Домашние задания сохранены');
-  });
+  initAttendancePanel();
 
   const addMemeBtn = $('admin-add-meme-btn');
   const memeFile = $('admin-meme-file');
@@ -1715,7 +1910,6 @@ function initAdminPanel(){
     });
   });
 
-  renderAdminNotes();
   renderAdminMemes();
 }
 
@@ -2049,6 +2243,8 @@ async function init(){
 
   renderWidget();
   initWidgetNav();
+
+  initCalendarPopup();
 
   initScheduleTabs();
   initLessonForm();
