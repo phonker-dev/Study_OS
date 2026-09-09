@@ -314,6 +314,15 @@ const DB = {
     if (res.error) throw res.error;
     return res.data || [];
   },
+  /* Вся история сразу — для сводки по группе и экспорта в CSV,
+     чтобы старосте не нужно было заходить в Supabase вообще. */
+  async listAllAttendance(){
+    if (!this.ready) return [];
+    const res = await this.client.from('attendance')
+      .select('*').order('lesson_date').order('start_time');
+    if (res.error) throw res.error;
+    return res.data || [];
+  },
 
   /* Периоды календаря (сессия/каникулы/практика): читает кто угодно,
      пишет только вошедший админ. */
@@ -1145,7 +1154,7 @@ function renderScheduleWindow(){
           (lesson.room && lesson.teacher ? ' · ' : '') + escapeHtml(lesson.teacher || '') + '</div>' +
         (hasNote || dueBadge
           ? '<div class="lc-note">' +
-              '<span class="lc-note-label">!</span> ' + escapeHtml(hasNote || '—') + dueBadge +
+              '<span class="lc-note-label">ДЗ</span> ' + escapeHtml(hasNote || '—') + dueBadge +
             '</div>'
           : '');
       if (editable){
@@ -2000,6 +2009,111 @@ function initAttendanceLogin(){
   });
 }
 
+/* ---------------------------------------------------------
+   21b-2. Сводка по группе и экспорт в CSV — чтобы старосте не
+   приходилось заходить в Supabase вообще, всё видно и скачивается
+   прямо в окне «Журнал».
+   --------------------------------------------------------- */
+State.attendanceAllRecords = [];
+
+function csvEscapeCell(v){
+  v = String(v == null ? '' : v);
+  if (/[;\n"]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"';
+  return v;
+}
+
+function downloadTextFile(filename, text){
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+function normalizeAttendanceRecord(r){
+  // приводит и локальную, и Supabase-запись к одному виду
+  return {
+    date: r.date || r.lesson_date,
+    start: r.start || r.start_time,
+    subject: r.subject || '',
+    present: r.present || []
+  };
+}
+
+async function loadAttendanceSummary(){
+  const box = $('att-summary-table');
+  if (box) box.innerHTML = '<div class="att-summary-loading">Считаю…</div>';
+
+  let records = [];
+  if (DB.ready && State.isAdmin){
+    try { records = (await DB.listAllAttendance()).map(normalizeAttendanceRecord); }
+    catch(e){ showToast('Сводка из БД недоступна: ' + e.message, true); }
+  }
+  if (!records.length){
+    const all = attendanceLocalAll();
+    records = Object.keys(all).map(function(k){
+      const rec = normalizeAttendanceRecord(all[k]);
+      if (!rec.date) rec.date = k.split('|')[0];
+      if (!rec.start) rec.start = k.split('|')[1];
+      return rec;
+    });
+  }
+  records.sort(function(a, b){ return (a.date + a.start).localeCompare(b.date + b.start); });
+  State.attendanceAllRecords = records;
+  renderAttendanceSummaryTable(records);
+}
+
+function renderAttendanceSummaryTable(records){
+  const box = $('att-summary-table');
+  if (!box) return;
+  if (!records.length){
+    box.innerHTML = '<div class="att-summary-empty">Пока ни одной сохранённой пары</div>';
+    return;
+  }
+  const rows = GROUP_STUDENTS.map(function(name){
+    const count = records.filter(function(r){ return (r.present || []).indexOf(name) !== -1; }).length;
+    const pct = Math.round((count / records.length) * 100);
+    return { name: name, count: count, pct: pct };
+  }).sort(function(a, b){ return a.pct - b.pct; }); // сначала те, у кого хуже с посещаемостью
+
+  let html = '<table class="att-summary"><thead><tr>' +
+    '<th>Студент</th><th>Был(а)</th><th>%</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    const cls = r.pct < 50 ? 'is-bad' : (r.pct < 80 ? 'is-mid' : 'is-good');
+    html += '<tr class="' + cls + '"><td>' + escapeHtml(r.name) + '</td>' +
+      '<td>' + r.count + '/' + records.length + '</td><td>' + r.pct + '%</td></tr>';
+  });
+  html += '</tbody></table>';
+  box.innerHTML = html;
+}
+
+function exportAttendanceCSV(){
+  const records = State.attendanceAllRecords;
+  if (!records || !records.length){ showToast('Сначала нажмите «Обновить сводку»', true); return; }
+
+  let csv = 'Дата;Время;Предмет;Присутствовало;Список присутствовавших\n';
+  records.forEach(function(r){
+    csv += [r.date, r.start, r.subject, (r.present || []).length, (r.present || []).join(', ')]
+      .map(csvEscapeCell).join(';') + '\n';
+  });
+  csv += '\nСтудент;Посещений;Всего пар;%\n';
+  GROUP_STUDENTS.forEach(function(name){
+    const count = records.filter(function(r){ return (r.present || []).indexOf(name) !== -1; }).length;
+    const pct = Math.round((count / records.length) * 100);
+    csv += [name, count, records.length, pct + '%'].map(csvEscapeCell).join(';') + '\n';
+  });
+
+  downloadTextFile('poseshaemost_' + formatIsoDate(now()) + '.csv', '\uFEFF' + csv);
+}
+
+function initAttendanceSummary(){
+  const refreshBtn = $('att-summary-refresh');
+  const exportBtn = $('att-summary-export');
+  if (refreshBtn) refreshBtn.addEventListener('click', loadAttendanceSummary);
+  if (exportBtn) exportBtn.addEventListener('click', exportAttendanceCSV);
+}
+
 function initAttendancePanel(){
   const dateInput = $('att-date'); const paritySel = $('att-parity');
   const daySel = $('att-day'); const lessonSel = $('att-lesson');
@@ -2170,7 +2284,7 @@ function setAdminMode(on){
   document.body.classList.toggle('is-admin', on);
   renderScheduleWindow();
   renderShitpostGallery();
-  if (on){ renderAdminMemes(); initAttendanceLessonOptions(); loadAttendanceForSelection(); }
+  if (on){ renderAdminMemes(); initAttendanceLessonOptions(); loadAttendanceForSelection(); loadAttendanceSummary(); }
 }
 
 /* Общая проверка пароля для обоих окон (админка и журнал) —
@@ -2336,7 +2450,7 @@ function openApp(appKey){
   if (appKey === 'settings'){ fillSettingsForm(); }
   if (appKey === 'shitpost'){ renderShitpostGallery(); }
   if (appKey === 'admin'){ if (State.isAdmin){ renderAdminMemes(); } }
-  if (appKey === 'attendance'){ if (State.isAdmin){ initAttendanceLessonOptions(); loadAttendanceForSelection(); } }
+  if (appKey === 'attendance'){ if (State.isAdmin){ initAttendanceLessonOptions(); loadAttendanceForSelection(); loadAttendanceSummary(); } }
 }
 
 /* ---- Панель задач ---- */
@@ -2612,6 +2726,7 @@ async function init(){
   initAdminPanel();
   initAttendanceLogin();
   initAttendancePanel();
+  initAttendanceSummary();
 
   initWindowChrome();
   initDesktopIcons();
