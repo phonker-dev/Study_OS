@@ -1145,7 +1145,7 @@ function renderScheduleWindow(){
           (lesson.room && lesson.teacher ? ' · ' : '') + escapeHtml(lesson.teacher || '') + '</div>' +
         (hasNote || dueBadge
           ? '<div class="lc-note">' +
-              '<span class="lc-note-label">ДЗ</span> ' + escapeHtml(hasNote || '—') + dueBadge +
+              '<span class="lc-note-label">!</span> ' + escapeHtml(hasNote || '—') + dueBadge +
             '</div>'
           : '');
       if (editable){
