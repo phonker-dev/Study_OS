@@ -369,8 +369,20 @@
         </div>
         <div class="admin-section">
           <h4>Электронный журнал (посещаемость)</h4>
-          <p>Вынесен в отдельное окно, чтобы не мешать остальному. Откройте «Журнал» через меню Пуск — вход туда общий с админкой, повторно пароль вводить не нужно.</p>
+          <p>Вынесен в отдельное окно, чтобы не мешать остальному. Вход туда общий с админкой — повторно пароль вводить не нужно.</p>
           <button class="xp-tool-btn" id="admin-open-attendance">Открыть журнал</button>
+        </div>
+        <div class="admin-section">
+          <h4>Периоды календаря (сессия, каникулы, практика)</h4>
+          <p class="admin-section-hint">Отмечаются цветным овалом на датах во всплывающем календаре — видно всем.</p>
+          <div class="admin-period-form">
+            <input type="text" id="period-label" placeholder="Название, напр. Сессия">
+            <select id="period-color"></select>
+            <label>с <input type="date" id="period-start"></label>
+            <label>по <input type="date" id="period-end"></label>
+            <button class="xp-tool-btn primary" id="period-add">Добавить</button>
+          </div>
+          <ul id="admin-period-list" class="admin-period-list"></ul>
         </div>
         <div class="admin-section">
           <h4>Управление мемами (Щитпост)</h4>
@@ -540,7 +552,20 @@
         <span id="tray-weather-icon"></span>
         <span id="tray-weather-temp">--°C</span>
       </div>
-      <div id="tray-clock" title="Открыть календарь" role="button" tabindex="0"></div>
+      <div id="tray-clock" title="Открыть календарь" role="button" tabindex="0">
+        <svg class="tray-clock-icon" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="2.5" y="4" width="15" height="13.5" rx="1.6" fill="#eaf2ff" stroke="#1147b8" stroke-width="1.3"/>
+          <rect x="2.5" y="4" width="15" height="3.6" rx="1.4" fill="#3a93ff" stroke="#1147b8" stroke-width="1.3"/>
+          <line x1="6" y1="2.6" x2="6" y2="5.4" stroke="#1147b8" stroke-width="1.3" stroke-linecap="round"/>
+          <line x1="14" y1="2.6" x2="14" y2="5.4" stroke="#1147b8" stroke-width="1.3" stroke-linecap="round"/>
+          <circle cx="6.3" cy="11.2" r="1.05" fill="#1147b8"/>
+          <circle cx="10" cy="11.2" r="1.05" fill="#1147b8"/>
+          <circle cx="13.7" cy="11.2" r="1.05" fill="#1147b8"/>
+          <circle cx="6.3" cy="14.5" r="1.05" fill="#1147b8"/>
+          <circle cx="10" cy="14.5" r="1.05" fill="#1147b8"/>
+        </svg>
+        <span id="tray-clock-time"></span>
+      </div>
     </div>
   </div>
 
@@ -559,6 +584,7 @@
       <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
     </div>
     <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-legend hidden" id="cal-legend"></div>
     <button id="cal-today" class="xp-tool-btn cal-today-btn">Сегодня</button>
   </div>
   <div id="calendar-overlay" class="hidden"></div>
