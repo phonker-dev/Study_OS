@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Study OS</title>
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 
@@ -446,8 +446,10 @@
             <select id="att-lesson"></select>
           </label>
         </div>
+        <p class="admin-section-hint">Отмечайте крестиком только тех, кого <b>нет</b> — остальные автоматически считаются присутствующими.</p>
         <div class="admin-att-actions">
-          <button class="xp-tool-btn" id="att-mark-all">Отметить всех присутствующими</button>
+          <button class="xp-tool-btn" id="att-mark-all">Все присутствуют</button>
+          <button class="xp-tool-btn" id="att-mark-all-absent">Пары не было (все отсутствуют)</button>
           <button class="xp-tool-btn primary" id="att-save">Сохранить посещаемость</button>
         </div>
         <div id="att-meta" class="att-meta hidden"></div>
@@ -457,10 +459,15 @@
           <div id="att-history" class="att-history"></div>
         </div>
         <div class="att-summary-block">
-          <h5>Сводка по группе (все сохранённые пары)</h5>
+          <h5>Сводка по группе</h5>
+          <div class="att-summary-range">
+            <label>С <input type="date" id="att-summary-from"></label>
+            <label>По <input type="date" id="att-summary-to"></label>
+          </div>
           <div class="att-summary-actions">
             <button class="xp-tool-btn" id="att-summary-refresh">Обновить сводку</button>
             <button class="xp-tool-btn" id="att-summary-export">Скачать CSV</button>
+            <button class="xp-tool-btn" id="att-summary-image">Скачать картинку</button>
           </div>
           <div id="att-summary-table"></div>
         </div>
@@ -601,7 +608,7 @@
 
 <!-- Подключение скриптов -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="supabase.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>
