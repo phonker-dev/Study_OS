@@ -465,6 +465,63 @@ async function loadMemes(){
 }
 
 /* ---------------------------------------------------------
+   6b. Живая синхронизация (Supabase Realtime)
+   ---------------------------------------------------------
+   Без этого страница подтягивает общие данные только при загрузке —
+   если одногруппник поменял что-то, пока вы уже открыли сайт, вы
+   узнаёте об этом только после ручного обновления страницы.
+   Здесь подписываемся на изменения в публичных таблицах и просто
+   перезагружаем соответствующий кусок данных + перерисовываем то,
+   что уже на экране.
+
+   ВАЖНО: чтобы Realtime реально присылал события, у таблиц должна
+   быть включена репликация — см. блок в конце supabase-schema.sql
+   (alter publication supabase_realtime add table ...). Без этого
+   подписка молча ничего не получит — это настройка на стороне
+   Supabase, не баг фронтенда. */
+function initRealtimeSync(){
+  if (!DB.ready) return;
+  const client = DB.client;
+
+  client.channel('study-os-public-sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule' }, function(){
+      loadInitialSchedule().then(function(){ renderWidget(); renderScheduleWindow(); });
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'day_notes' }, function(){
+      loadDayNotes();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_periods' }, function(){
+      loadCalendarPeriods().then(function(){ renderCalendarGrid(); });
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'memes' }, function(){
+      loadMemes().then(function(){ renderShitpostGallery(); });
+    })
+    .subscribe();
+
+  // Посещаемость видна только вошедшему старосте — подписываемся
+  // отдельно и только когда включён режим админа, чтобы не запрашивать
+  // лишнее и не спамить RLS-отказами у обычных посетителей.
+  let attendanceChannel = null;
+  function syncAttendanceChannel(){
+    if (State.isAdmin && !attendanceChannel){
+      attendanceChannel = client.channel('study-os-attendance-sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, function(){
+          if (State.openApps.has('attendance')){
+            loadAttendanceForSelection();
+            loadAttendanceSummary();
+          }
+        })
+        .subscribe();
+    } else if (!State.isAdmin && attendanceChannel){
+      client.removeChannel(attendanceChannel);
+      attendanceChannel = null;
+    }
+  }
+  document.addEventListener('study-os:admin-mode-changed', syncAttendanceChannel);
+  syncAttendanceChannel();
+}
+
+/* ---------------------------------------------------------
    7. Всплывающее уведомление (вместо alert)
    --------------------------------------------------------- */
 let toastTimer = null;
@@ -1887,19 +1944,33 @@ function renderAttendanceMeta(snapshot){
     (snapshot.teacher ? ' · ' + escapeHtml(snapshot.teacher) : '');
 }
 
-function renderAttendanceList(presentSet){
+/* presentSet — имена, отмеченные ПРИСУТСТВУЮЩИМИ в записи (так и хранится
+   в БД/локально, формат не меняется). На экране же теперь крестиком
+   отмечают только ОТСУТСТВУЮЩИХ — так быстрее, когда почти вся группа
+   на месте. hasRecord=false (новая, ещё не сохранённая запись) значит
+   «по умолчанию считаем, что присутствуют все», а не «никто не отмечен». */
+function renderAttendanceList(presentSet, hasRecord){
   const list = $('att-student-list');
   if (!list) return;
   list.innerHTML = '';
   GROUP_STUDENTS.forEach(function(name){
     const li = document.createElement('li');
+    const isAbsent = hasRecord ? !presentSet.has(name) : false;
+    li.classList.toggle('is-absent', isAbsent);
+
     const label = document.createElement('label');
     const cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.checked = presentSet.has(name);
+    cb.checked = isAbsent;
     cb.dataset.student = name;
+    cb.addEventListener('change', function(){ li.classList.toggle('is-absent', cb.checked); });
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'att-student-name';
+    nameSpan.textContent = name;
+
     label.appendChild(cb);
-    label.appendChild(document.createTextNode(' ' + name));
+    label.appendChild(nameSpan);
     li.appendChild(label);
     list.appendChild(li);
   });
@@ -1911,7 +1982,7 @@ async function loadAttendanceForSelection(){
   const snapshot = currentLessonSnapshot();
   const date = (dateInput && dateInput.value) || formatIsoDate(now());
   if (!dateInput || !snapshot){
-    State.attendanceLoaded = null; renderAttendanceMeta(null); renderAttendanceList(new Set());
+    State.attendanceLoaded = null; renderAttendanceMeta(null); renderAttendanceList(new Set(), false);
     renderAttendanceHistory(date);
     return;
   }
@@ -1926,7 +1997,7 @@ async function loadAttendanceForSelection(){
   }
   State.attendanceLoaded = { date: date, start: snapshot.start };
   renderAttendanceMeta(snapshot);
-  renderAttendanceList(new Set((record && record.present) || []));
+  renderAttendanceList(new Set((record && record.present) || []), !!record);
   renderAttendanceHistory(date);
 }
 
@@ -1971,7 +2042,7 @@ async function renderAttendanceHistory(date){
 function loadAttendanceRecordDirectly(date, entry){
   State.attendanceLoaded = { date: date, start: entry.start };
   renderAttendanceMeta({ start: entry.start, subject: entry.subject, end: entry.end, room: entry.room, teacher: entry.teacher });
-  renderAttendanceList(new Set(entry.present || []));
+  renderAttendanceList(new Set(entry.present || []), true);
   showToast('Открыта запись ' + entry.start + ' за ' + date);
 }
 
@@ -2014,7 +2085,38 @@ function initAttendanceLogin(){
    приходилось заходить в Supabase вообще, всё видно и скачивается
    прямо в окне «Журнал».
    --------------------------------------------------------- */
-State.attendanceAllRecords = [];
+State.attendanceAllRecords = [];      // вся история — для полного CSV
+State.attendanceSummaryRecords = [];  // то, что реально попало в сводку/картинку (с учётом периода)
+
+function pluralPairs(n){
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'пара';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'пары';
+  return 'пар';
+}
+
+function attendanceSummaryRange(){
+  const fromEl = $('att-summary-from');
+  const toEl = $('att-summary-to');
+  return { from: (fromEl && fromEl.value) || '', to: (toEl && toEl.value) || '' };
+}
+
+function filterRecordsByRange(records, range){
+  if (!range.from && !range.to) return records;
+  return records.filter(function(r){
+    if (range.from && r.date < range.from) return false;
+    if (range.to && r.date > range.to) return false;
+    return true;
+  });
+}
+
+function attendanceRangeLabel(records, range){
+  if (!records.length) return 'Нет данных за период';
+  const dates = records.map(function(r){ return r.date; });
+  const from = range.from || dates.reduce(function(a, b){ return a < b ? a : b; });
+  const to = range.to || dates.reduce(function(a, b){ return a > b ? a : b; });
+  return from === to ? formatDateHuman(from) : formatDateHuman(from) + ' — ' + formatDateHuman(to);
+}
 
 function csvEscapeCell(v){
   v = String(v == null ? '' : v);
@@ -2061,35 +2163,47 @@ async function loadAttendanceSummary(){
   }
   records.sort(function(a, b){ return (a.date + a.start).localeCompare(b.date + b.start); });
   State.attendanceAllRecords = records;
-  renderAttendanceSummaryTable(records);
+  const range = attendanceSummaryRange();
+  const filtered = filterRecordsByRange(records, range);
+  State.attendanceSummaryRecords = filtered;
+  renderAttendanceSummaryTable(filtered, range);
 }
 
-function renderAttendanceSummaryTable(records){
+function attendanceStudentStats(records){
+  return GROUP_STUDENTS.map(function(name){
+    const count = records.filter(function(r){ return (r.present || []).indexOf(name) !== -1; }).length;
+    const missed = records.length - count;
+    const pct = records.length ? Math.round((count / records.length) * 100) : 0;
+    return { name: name, count: count, missed: missed, pct: pct };
+  }).sort(function(a, b){ return a.pct - b.pct; }); // сначала те, у кого хуже с посещаемостью
+}
+
+function renderAttendanceSummaryTable(records, range){
   const box = $('att-summary-table');
   if (!box) return;
   if (!records.length){
-    box.innerHTML = '<div class="att-summary-empty">Пока ни одной сохранённой пары</div>';
+    box.innerHTML = '<div class="att-summary-empty">За выбранный период сохранённых пар нет</div>';
     return;
   }
-  const rows = GROUP_STUDENTS.map(function(name){
-    const count = records.filter(function(r){ return (r.present || []).indexOf(name) !== -1; }).length;
-    const pct = Math.round((count / records.length) * 100);
-    return { name: name, count: count, pct: pct };
-  }).sort(function(a, b){ return a.pct - b.pct; }); // сначала те, у кого хуже с посещаемостью
+  const rows = attendanceStudentStats(records);
 
-  let html = '<table class="att-summary"><thead><tr>' +
-    '<th>Студент</th><th>Был(а)</th><th>%</th></tr></thead><tbody>';
+  let html = '<div class="att-summary-period">' + escapeHtml(attendanceRangeLabel(records, range || {})) +
+    ' · ' + records.length + ' ' + pluralPairs(records.length) + '</div>';
+  html += '<table class="att-summary"><thead><tr>' +
+    '<th>Студент</th><th>Был(а)</th><th>Пропусков</th><th>%</th></tr></thead><tbody>';
   rows.forEach(function(r){
     const cls = r.pct < 50 ? 'is-bad' : (r.pct < 80 ? 'is-mid' : 'is-good');
     html += '<tr class="' + cls + '"><td>' + escapeHtml(r.name) + '</td>' +
-      '<td>' + r.count + '/' + records.length + '</td><td>' + r.pct + '%</td></tr>';
+      '<td>' + r.count + '/' + records.length + '</td>' +
+      '<td>' + r.missed + '</td><td>' + r.pct + '%</td></tr>';
   });
   html += '</tbody></table>';
   box.innerHTML = html;
 }
 
 function exportAttendanceCSV(){
-  const records = State.attendanceAllRecords;
+  const records = (State.attendanceSummaryRecords && State.attendanceSummaryRecords.length)
+    ? State.attendanceSummaryRecords : State.attendanceAllRecords;
   if (!records || !records.length){ showToast('Сначала нажмите «Обновить сводку»', true); return; }
 
   let csv = 'Дата;Время;Предмет;Присутствовало;Список присутствовавших\n';
@@ -2097,21 +2211,93 @@ function exportAttendanceCSV(){
     csv += [r.date, r.start, r.subject, (r.present || []).length, (r.present || []).join(', ')]
       .map(csvEscapeCell).join(';') + '\n';
   });
-  csv += '\nСтудент;Посещений;Всего пар;%\n';
-  GROUP_STUDENTS.forEach(function(name){
-    const count = records.filter(function(r){ return (r.present || []).indexOf(name) !== -1; }).length;
-    const pct = Math.round((count / records.length) * 100);
-    csv += [name, count, records.length, pct + '%'].map(csvEscapeCell).join(';') + '\n';
+  csv += '\nСтудент;Посещений;Пропусков;Всего пар;%\n';
+  attendanceStudentStats(records).forEach(function(r){
+    csv += [r.name, r.count, r.missed, records.length, r.pct + '%'].map(csvEscapeCell).join(';') + '\n';
   });
 
   downloadTextFile('poseshaemost_' + formatIsoDate(now()) + '.csv', '\uFEFF' + csv);
 }
 
+/* Готовая «карточка» сводки в виде PNG — можно сразу кинуть в чат группы,
+   без вставки таблицы руками. Рисуется на canvas, без внешних библиотек. */
+function exportAttendanceImage(){
+  const records = State.attendanceSummaryRecords;
+  if (!records || !records.length){ showToast('Сначала нажмите «Обновить сводку»', true); return; }
+
+  const rows = attendanceStudentStats(records);
+  const range = attendanceSummaryRange();
+  const periodLabel = attendanceRangeLabel(records, range);
+
+  const rowH = 34, headH = 108, padX = 24, width = 560;
+  const height = headH + rows.length * rowH + 30;
+
+  const canvas = document.createElement('canvas');
+  const scale = 2; // чётче на ретине/телефонах
+  canvas.width = width * scale; canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+
+  const bg = ctx.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, '#eaf3ff'); bg.addColorStop(1, '#d7e6fb');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = '#12305e';
+  ctx.font = '700 20px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('Посещаемость группы', padX, 34);
+  ctx.fillStyle = '#4a6a9a';
+  ctx.font = '600 13px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(periodLabel + ' · ' + records.length + ' ' + pluralPairs(records.length), padX, 54);
+
+  const colName = padX, colCount = width - 210, colMissed = width - 130, colPct = width - 58;
+  ctx.fillStyle = '#6b7d9c';
+  ctx.font = '700 11px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('СТУДЕНТ', colName, headH - 14);
+  ctx.fillText('БЫЛ(А)', colCount, headH - 14);
+  ctx.fillText('ПРОПУСК', colMissed, headH - 14);
+  ctx.fillText('%', colPct, headH - 14);
+  ctx.strokeStyle = 'rgba(74,106,154,.35)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(padX - 12, headH - 6); ctx.lineTo(width - padX + 12, headH - 6); ctx.stroke();
+
+  rows.forEach(function(r, i){
+    const y = headH + i * rowH;
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.22)';
+    ctx.fillRect(padX - 12, y, width - (padX - 12) * 2, rowH - 4);
+
+    const color = r.pct < 50 ? '#a3241a' : (r.pct < 80 ? '#8a5c00' : '#217a34');
+    ctx.fillStyle = '#1c2b45';
+    ctx.font = '600 13px "Segoe UI", Arial, sans-serif';
+    ctx.fillText(r.name, colName, y + rowH / 2 + 2, colCount - colName - 14);
+    ctx.fillStyle = color; ctx.font = '700 13px "Segoe UI", Arial, sans-serif';
+    ctx.fillText(r.count + '/' + records.length, colCount, y + rowH / 2 + 2);
+    ctx.fillText(String(r.missed), colMissed, y + rowH / 2 + 2);
+    ctx.fillText(r.pct + '%', colPct, y + rowH / 2 + 2);
+  });
+
+  ctx.fillStyle = '#7d95c0';
+  ctx.font = '600 10px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('Study OS', padX, height - 10);
+
+  canvas.toBlob(function(blob){
+    if (!blob){ showToast('Не удалось собрать картинку', true); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'poseshaemost_' + formatIsoDate(now()) + '.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }, 'image/png');
+}
+
 function initAttendanceSummary(){
   const refreshBtn = $('att-summary-refresh');
   const exportBtn = $('att-summary-export');
+  const imageBtn = $('att-summary-image');
+  const fromEl = $('att-summary-from');
+  const toEl = $('att-summary-to');
   if (refreshBtn) refreshBtn.addEventListener('click', loadAttendanceSummary);
   if (exportBtn) exportBtn.addEventListener('click', exportAttendanceCSV);
+  if (imageBtn) imageBtn.addEventListener('click', exportAttendanceImage);
+  [fromEl, toEl].forEach(function(el){ if (el) el.addEventListener('change', loadAttendanceSummary); });
 }
 
 function initAttendancePanel(){
@@ -2137,8 +2323,21 @@ function initAttendancePanel(){
   lessonSel.addEventListener('change', loadAttendanceForSelection);
   dateInput.addEventListener('change', loadAttendanceForSelection);
 
+  // Крестиком отмечают отсутствующих, поэтому «отметить всех» — это
+  // на самом деле два разных действия: сбросить все отметки (все на
+  // месте) или, наоборот, отметить отсутствие всей группы (пара отменена).
   if (markAllBtn) markAllBtn.addEventListener('click', function(){
-    document.querySelectorAll('#att-student-list input[type=checkbox]').forEach(function(cb){ cb.checked = true; });
+    document.querySelectorAll('#att-student-list input[type=checkbox]').forEach(function(cb){
+      cb.checked = false;
+      cb.dispatchEvent(new Event('change'));
+    });
+  });
+  const markAllAbsentBtn = $('att-mark-all-absent');
+  if (markAllAbsentBtn) markAllAbsentBtn.addEventListener('click', function(){
+    document.querySelectorAll('#att-student-list input[type=checkbox]').forEach(function(cb){
+      cb.checked = true;
+      cb.dispatchEvent(new Event('change'));
+    });
   });
 
   if (saveBtn) saveBtn.addEventListener('click', async function(){
@@ -2146,8 +2345,10 @@ function initAttendancePanel(){
       (State.attendanceLoaded ? { start: State.attendanceLoaded.start } : null);
     if (!snapshot){ showToast('Нет пары для выбранного дня', true); return; }
     const date = dateInput.value || formatIsoDate(now());
-    const present = Array.from(document.querySelectorAll('#att-student-list input[type=checkbox]:checked'))
+    // Чекбокс = «отсутствует», присутствующие — все остальные из группы
+    const absentNames = Array.from(document.querySelectorAll('#att-student-list input[type=checkbox]:checked'))
       .map(function(cb){ return cb.dataset.student; });
+    const present = GROUP_STUDENTS.filter(function(name){ return absentNames.indexOf(name) === -1; });
 
     const record = {
       date: date, start: snapshot.start, end: snapshot.end || '',
@@ -2285,6 +2486,7 @@ function setAdminMode(on){
   renderScheduleWindow();
   renderShitpostGallery();
   if (on){ renderAdminMemes(); initAttendanceLessonOptions(); loadAttendanceForSelection(); loadAttendanceSummary(); }
+  document.dispatchEvent(new CustomEvent('study-os:admin-mode-changed', { detail: { on: on } }));
 }
 
 /* Общая проверка пароля для обоих окон (админка и журнал) —
@@ -2733,6 +2935,8 @@ async function init(){
   initStartMenu();
 
   if (hadSession) setAdminMode(true);
+
+  initRealtimeSync();
 
   const cityLabel = $('weather-city-label');
   if (cityLabel) cityLabel.textContent = State.settings.city || '—';
