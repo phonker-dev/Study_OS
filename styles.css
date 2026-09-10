@@ -907,10 +907,33 @@ input, select, textarea{
   max-height: 12rem; overflow-y: auto;
   border: 1px solid #cfdcf2; border-radius: .25rem; background: #fff;
 }
-.att-student-list li{ border-bottom: 1px solid #eef2fa; padding: .25rem .4rem; }
+.att-student-list li{ border-bottom: 1px solid #eef2fa; padding: .25rem .4rem; transition: background .12s; }
 .att-student-list li:last-child{ border-bottom: none; }
-.att-student-list label{ display: flex; align-items: center; gap: .4rem; font-size: .56rem; cursor: pointer; }
-.att-student-list input[type=checkbox]{ width: 1rem; height: 1rem; }
+.att-student-list li.is-absent{ background: rgba(211,47,32,.08); }
+.att-student-list label{ display: flex; align-items: center; gap: .5rem; font-size: .56rem; cursor: pointer; }
+.att-student-name{ transition: color .12s; }
+.att-student-list li.is-absent .att-student-name{ color: #a3160c; font-weight: 700; }
+
+/* Чекбокс посещаемости отмечает ОТСУТСТВИЕ: пустой квадрат = на паре,
+   красный крестик = отсутствует. Раньше это была галочка = "был(а)",
+   теперь наоборот — так быстрее отмечать, когда группа почти в сборе. */
+.att-student-list input[type=checkbox]{
+  appearance: none; -webkit-appearance: none; margin: 0; flex-shrink: 0;
+  width: 1.15rem; height: 1.15rem; border-radius: .3rem;
+  border: 1.5px solid #c3cfe3; background: #fff;
+  display: inline-grid; place-content: center; cursor: pointer;
+  transition: background .12s, border-color .12s, transform .08s;
+}
+.att-student-list input[type=checkbox]:hover{ border-color: #a3160c; }
+.att-student-list input[type=checkbox]:active{ transform: scale(.92); }
+.att-student-list input[type=checkbox]:checked{
+  background: linear-gradient(180deg, #ff6a58, #d32f20 65%, #b8281b);
+  border-color: #931c11;
+}
+.att-student-list input[type=checkbox]:checked::after{
+  content: '\2715';
+  color: #fff; font-size: .62rem; font-weight: 700; line-height: 1;
+}
 
 /* =========================================================
    Доп. мобильная адаптация под новые компоненты
@@ -928,7 +951,12 @@ input, select, textarea{
   .admin-att-controls input, .admin-att-controls select{ min-height: 2rem; font-size: .68rem; }
   .att-student-list{ max-height: 40dvh; }
   .att-student-list label{ min-height: 2rem; }
+  .att-student-list input[type=checkbox]{ width: 1.4rem; height: 1.4rem; }
   .admin-att-actions .xp-tool-btn{ flex: 1 1 auto; min-height: 2rem; }
+  .att-summary-range{ flex-direction: column; }
+  .att-summary-range label{ width: 100%; }
+  .att-summary-range input{ min-height: 2rem; font-size: .68rem; }
+  .att-summary-actions .xp-tool-btn{ flex: 1 1 auto; min-height: 2rem; }
 }
 
 /* --- Отдельное окно "Журнал посещаемости" --- */
@@ -1006,8 +1034,12 @@ input, select, textarea{
   font-size: .48rem; text-transform: uppercase; letter-spacing: .04em;
   color: #6b7d9c; margin: 0 0 .25rem;
 }
+.att-summary-range{ display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .35rem; }
+.att-summary-range label{ display: flex; flex-direction: column; font-size: .5rem; gap: .15rem; color: #48597a; }
+.att-summary-range input{ font-size: .58rem; padding: .2rem .3rem; }
 .att-summary-actions{ display: flex; gap: .35rem; margin-bottom: .35rem; flex-wrap: wrap; }
 .att-summary-loading, .att-summary-empty{ font-size: .52rem; color: #9aa8c2; padding: .2rem 0; }
+.att-summary-period{ font-size: .5rem; color: #48597a; font-weight: 700; margin-bottom: .25rem; }
 table.att-summary{ width: 100%; border-collapse: collapse; font-size: .52rem; }
 table.att-summary th, table.att-summary td{
   padding: .22rem .3rem; border-bottom: 1px solid #eef2fa; text-align: left;
