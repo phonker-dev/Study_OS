@@ -191,6 +191,7 @@ const State = {
   notes: [],
   settings: {
     city: '', timezone: '',
+    weatherLat: '', weatherLon: '', // координаты, по которым реально считана погода (см. fetchWeather)
     homeLat: '', homeLon: '', homeAddress: '',
     studyLat: '', studyLon: '', studyAddress: ''
   },
@@ -201,7 +202,8 @@ const State = {
   openApps: new Set(),
   dayNotes: {},   // { mon: 'текст ДЗ', … } — общие для всех
   calendarPeriods: [], // [{ label, color, start, end }] — сессии/каникулы/практика
-  memes: [],      // [{ id, url, caption }]
+  memes: [],      // [{ id, url, caption }] — только одобренные, показываются всем
+  memesPending: [], // [{ id, url, caption, submitted_by }] — очередь на модерацию, видна только админу
   isAdmin: false,
   weather: null
 };
@@ -248,14 +250,31 @@ const DB = {
   async loadMemes(){
     if (!this.ready) return null;
     const res = await this.client.from('memes')
-      .select('id, url, caption').order('created_at', { ascending: false });
+      .select('id, url, caption, approved, submitted_by').order('created_at', { ascending: false });
     if (res.error) throw res.error;
     return res.data || [];
   },
   async addMeme(url, caption){
     if (!this.ready) return null;
     const res = await this.client.from('memes')
-      .insert([{ url: url, caption: caption || '' }]).select().single();
+      .insert([{ url: url, caption: caption || '', approved: true }]).select().single();
+    if (res.error) throw res.error;
+    return res.data;
+  },
+  /* Предложка от кого угодно (анонимный ключ) — всегда неодобренная,
+     RLS-политика "memes submit for everyone" отклонит попытку вставить
+     approved:true не от админа. */
+  async submitMeme(url, caption, submittedBy){
+    if (!this.ready) return null;
+    const res = await this.client.from('memes')
+      .insert([{ url: url, caption: caption || '', approved: false, submitted_by: submittedBy || '' }])
+      .select().single();
+    if (res.error) throw res.error;
+    return res.data;
+  },
+  async updateMeme(id, fields){
+    if (!this.ready) return null;
+    const res = await this.client.from('memes').update(fields).eq('id', id).select().single();
     if (res.error) throw res.error;
     return res.data;
   },
@@ -329,7 +348,7 @@ const DB = {
   async loadPeriods(){
     if (!this.ready) return null;
     const res = await this.client.from('calendar_periods')
-      .select('id, label, color, start_date, end_date').order('start_date');
+      .select('id, label, color, start_date, end_date, created_at').order('created_at');
     if (res.error) throw res.error;
     return res.data || [];
   },
@@ -447,7 +466,12 @@ async function loadCalendarPeriods(){
   try {
     const remote = await DB.loadPeriods();
     if (remote && remote.length){
-      State.calendarPeriods = remote.map(function(p){ return { id: p.id, label: p.label, color: p.color, start: p.start_date, end: p.end_date }; });
+      State.calendarPeriods = remote
+        .map(function(p){ return { id: p.id, label: p.label, color: p.color, start: p.start_date, end: p.end_date, created_at: p.created_at || '' }; })
+        // подстраховка: сервер и так отдаёт по created_at, но на случай
+        // не отсортированного ответа гарантируем порядок «кто добавлен
+        // позже — тот выше» явно на клиенте
+        .sort(function(a, b){ return (a.created_at || '').localeCompare(b.created_at || ''); });
       Store.save(LS_KEYS.calendarPeriods, State.calendarPeriods);
       return;
     }
@@ -459,9 +483,18 @@ async function loadCalendarPeriods(){
 async function loadMemes(){
   try {
     const remote = await DB.loadMemes();
-    if (remote){ State.memes = remote; Store.save(LS_KEYS.memes, remote); return; }
+    if (remote){
+      // Для анонимного ключа RLS и так отдаёт только approved=true, но
+      // если сейчас вошёл админ — клиент видит вообще всё, поэтому явно
+      // разносим на «опубликовано» / «ждёт модерации» на клиенте.
+      State.memes = remote.filter(function(m){ return m.approved !== false; });
+      State.memesPending = remote.filter(function(m){ return m.approved === false; });
+      Store.save(LS_KEYS.memes, State.memes);
+      return;
+    }
   } catch(e){ console.warn('Мемы из БД недоступны:', e.message); }
   State.memes = Store.load(LS_KEYS.memes, []) || [];
+  State.memesPending = [];
 }
 
 /* ---------------------------------------------------------
@@ -494,7 +527,7 @@ function initRealtimeSync(){
       loadCalendarPeriods().then(function(){ renderCalendarGrid(); });
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'memes' }, function(){
-      loadMemes().then(function(){ renderShitpostGallery(); });
+      loadMemes().then(function(){ renderShitpostGallery(); renderMemeModeration(); });
     })
     .subscribe();
 
@@ -676,7 +709,11 @@ async function geocodeCity(city){
 
 /* Обратный геокодинг: координаты -> название города.
    Open-Meteo /search ищет только по имени, поэтому используем TomTom,
-   ключ для которого в проекте уже есть. */
+   ключ для которого в проекте уже есть.
+   localName у TomTom — это как раз имя НАСЕЛЁННОГО ПУНКТА (город/посёлок/
+   село), тогда как municipality в России нередко оказывается названием
+   административного муниципального образования, а не самого населённого
+   пункта — отсюда и баги вида «УРИКОВСКОЕ» вместо реального города/села. */
 async function reverseGeocode(lat, lon){
   const url = 'https://api.tomtom.com/search/2/reverseGeocode/' + lat + ',' + lon +
               '.json?key=' + TOMTOM_API_KEY + '&language=ru-RU&radius=20000';
@@ -686,7 +723,7 @@ async function reverseGeocode(lat, lon){
   const addr = data.addresses && data.addresses[0] && data.addresses[0].address;
   if (!addr) throw new Error('Не удалось определить адрес');
   return {
-    city: addr.municipality || addr.countrySecondarySubdivision || addr.countrySubdivision || '',
+    city: addr.localName || addr.municipality || addr.countrySecondarySubdivision || addr.countrySubdivision || '',
     freeform: addr.freeformAddress || ''
   };
 }
@@ -751,17 +788,31 @@ async function fetchWeather(){
   if (detailEl) detailEl.innerHTML = '<div class="weather-loading">Загрузка данных о погоде…</div>';
 
   try {
-    const geo = await geocodeCity(city);
-    if (geo.name) State.settings.city = geo.name;
-    if (cityLabel) cityLabel.textContent = State.settings.city;
+    let lat, lon, resolvedName;
+    // Если координаты уже известны (обычно после автоопределения по GPS) —
+    // берём погоду напрямую по ним, БЕЗ повторного поиска города по имени.
+    // Раньше здесь всегда шёл повторный geocodeCity(city) через другой
+    // сервис (Open-Meteo), который мог не найти точное совпадение по
+    // не самому распространённому названию (например, «Уриковское») и
+    // тихо подставлял погоду совсем другого места — отсюда рассинхрон.
+    if (State.settings.weatherLat && State.settings.weatherLon){
+      lat = State.settings.weatherLat; lon = State.settings.weatherLon;
+      resolvedName = city;
+    } else {
+      const geo = await geocodeCity(city);
+      lat = geo.lat; lon = geo.lon;
+      if (geo.name) State.settings.city = geo.name;
+      resolvedName = State.settings.city;
+    }
+    if (cityLabel) cityLabel.textContent = resolvedName;
 
-    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + geo.lat + '&longitude=' + geo.lon +
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
       '&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code' +
       '&timezone=auto';
     const res = await fetch(url);
     if (!res.ok) throw new Error('Сервис погоды недоступен');
     const data = await res.json();
-    applyWeather(data, State.settings.city);
+    applyWeather(data, resolvedName);
     saveSettings();
   } catch(e){
     if (detailEl) detailEl.innerHTML = '<div class="weather-error">Не удалось получить погоду: ' + escapeHtml(e.message) + '</div>';
@@ -784,17 +835,25 @@ function getPosition(){
   });
 }
 
+/* Возвращает { city, lat, lon } и сразу сохраняет координаты в настройки —
+   именно эти координаты потом использует fetchWeather() напрямую. */
 async function detectCityByGeolocation(){
   const coords = await getPosition();
   const place = await reverseGeocode(coords.latitude, coords.longitude);
-  if (!place.city) throw new Error('Не удалось определить город');
-  State.settings.city = place.city;
+  const cityName = place.city || place.freeform || '';
+  if (!cityName) throw new Error('Не удалось определить город');
+  State.settings.city = cityName;
+  State.settings.weatherLat = coords.latitude;
+  State.settings.weatherLon = coords.longitude;
   saveSettings();
-  return place.city;
+  return { city: cityName, lat: coords.latitude, lon: coords.longitude };
 }
 
-/* Погода по «сырым» координатам — быстрый путь при первом визите:
-   один запрос сразу даёт и погоду, и IANA-часовой пояс. */
+/* Погода по «сырым» координатам — быстрый путь при первом визите и при
+   ручном автоопределении города: один запрос сразу даёт и погоду, и
+   IANA-часовой пояс. Сохраняем координаты в настройки, чтобы дальнейшие
+   вызовы fetchWeather() (например, кнопка «Обновить») тоже брали погоду
+   по ним напрямую, а не переискивали место по имени. */
 async function fetchWeatherByCoords(lat, lon, cityName){
   const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
     '&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code' +
@@ -802,6 +861,10 @@ async function fetchWeatherByCoords(lat, lon, cityName){
   const res = await fetch(url);
   if (!res.ok) throw new Error('Сервис погоды недоступен');
   applyWeather(await res.json(), cityName);
+  State.settings.weatherLat = lat;
+  State.settings.weatherLon = lon;
+  if (cityName) State.settings.city = cityName;
+  saveSettings();
   const cityLabel = $('weather-city-label');
   if (cityLabel) cityLabel.textContent = cityName;
 }
@@ -814,11 +877,14 @@ function initAutoDetectCity(){
     btn.textContent = 'Определяю…';
     btn.disabled = true;
     try {
-      const city = await detectCityByGeolocation();
+      const result = await detectCityByGeolocation();
       const input = $('set-city');
-      if (input) input.value = city;
-      await fetchWeather();
-      showToast('Определён город: ' + city);
+      if (input) input.value = result.city;
+      // Погоду берём сразу по тем же координатам GPS — без повторного
+      // поиска по имени, чтобы не «уехать» на другое место с похожим
+      // названием.
+      await fetchWeatherByCoords(result.lat, result.lon, result.city);
+      showToast('Определён город: ' + result.city);
     } catch(e){
       showToast(e.message + '. Введите город вручную.', true);
     } finally {
@@ -833,9 +899,14 @@ async function autoDetectOnFirstVisit(){
   try {
     const coords = await getPosition();
     let cityName = '';
-    try { cityName = (await reverseGeocode(coords.latitude, coords.longitude)).city; } catch(e){}
+    try {
+      const place = await reverseGeocode(coords.latitude, coords.longitude);
+      cityName = place.city || place.freeform || '';
+    } catch(e){}
     if (cityName){
       State.settings.city = cityName;
+      State.settings.weatherLat = coords.latitude;
+      State.settings.weatherLon = coords.longitude;
       saveSettings();
       const input = $('set-city');
       if (input) input.value = cityName;
@@ -930,12 +1001,18 @@ function renderCalendarGrid(){
     if (cellDate.getTime() === selected.getTime()) btn.classList.add('is-selected');
     if (cellDate.getDay() === 0 || cellDate.getDay() === 6) btn.classList.add('is-weekend');
 
+    /* periodsForDate сохраняет исходный порядок State.calendarPeriods
+       (порядок добавления/created_at) — поэтому последний элемент
+       массива это последний ДОБАВЛЕННЫЙ период. Если дни пересекаются
+       (например день экзамена внутри диапазона сессии), красим клетку
+       именно им — новый слой перекрывает старый, а не наоборот. */
     const periods = periodsForDate(iso);
     if (periods.length){
+      const topPeriod = periods[periods.length - 1];
       btn.classList.add('has-period');
-      btn.style.setProperty('--period-color', periods[0].color);
+      btn.style.setProperty('--period-color', topPeriod.color);
       btn.title = periods.map(function(p){ return p.label; }).join(', ');
-      if (cellDate.getMonth() === month) monthLabelsSeen[periods[0].label] = periods[0].color;
+      if (cellDate.getMonth() === month) monthLabelsSeen[topPeriod.label] = topPeriod.color;
     }
 
     btn.textContent = cellDate.getDate();
@@ -1719,6 +1796,9 @@ function initSettingsWindow(){
     const newCity = cityInput ? cityInput.value.trim() : '';
     const cityChanged = newCity !== State.settings.city;
     State.settings.city = newCity;
+    // Город ввели/поменяли руками — прошлые GPS-координаты города уже не
+    // относятся к нему, иначе погода продолжит считаться по старой точке.
+    if (cityChanged){ State.settings.weatherLat = ''; State.settings.weatherLon = ''; }
 
     // Адрес введён, но координаты ещё не найдены — досчитываем на лету
     const homeInput = $('set-home-address');
@@ -1749,12 +1829,16 @@ function renderShitpostGallery(){
   if (!gallery) return;
   gallery.innerHTML = '';
 
+  // «+ Добавить мем» (файл/ссылка, публикуется сразу) — только у админа.
+  // «Предложить мем» (только по ссылке, уходит на модерацию) — у всех.
   const addBtn = $('shitpost-add-btn');
   if (addBtn) addBtn.style.display = State.isAdmin ? 'inline-block' : 'none';
+  const suggestBtn = $('shitpost-suggest-btn');
+  if (suggestBtn) suggestBtn.style.display = DB.ready ? 'inline-block' : 'none';
 
   if (!State.memes.length){
     gallery.innerHTML = '<div class="shitpost-empty">' +
-      (State.isAdmin ? 'Мемов пока нет. Нажмите «+ Добавить мем».' : 'Мемов пока нет.') +
+      (State.isAdmin ? 'Мемов пока нет. Нажмите «+ Добавить мем».' : 'Мемов пока нет. Можете предложить свой!') +
       '</div>';
     return;
   }
@@ -1765,13 +1849,20 @@ function renderShitpostGallery(){
     item.innerHTML =
       '<img src="' + escapeHtml(meme.url) + '" alt="' + escapeHtml(meme.caption || 'мем') + '" loading="lazy">' +
       (meme.caption ? '<div class="meme-caption">' + escapeHtml(meme.caption) + '</div>' : '') +
-      (State.isAdmin ? '<div class="meme-actions"><button type="button" title="Удалить">&#10005;</button></div>' : '');
+      (State.isAdmin ? '<div class="meme-actions">' +
+        '<button type="button" class="meme-edit" title="Изменить подпись">&#9998;</button>' +
+        '<button type="button" class="meme-delete" title="Удалить">&#10005;</button>' +
+      '</div>' : '');
 
     item.querySelector('img').addEventListener('click', function(){
       window.open(meme.url, '_blank', 'noopener');
     });
     if (State.isAdmin){
-      item.querySelector('.meme-actions button').addEventListener('click', function(e){
+      item.querySelector('.meme-edit').addEventListener('click', function(e){
+        e.stopPropagation();
+        editMemeCaption(meme);
+      });
+      item.querySelector('.meme-delete').addEventListener('click', function(e){
         e.stopPropagation();
         confirmDelete('Удалить этот мем?', function(){ removeMeme(meme); });
       });
@@ -1785,7 +1876,7 @@ async function addMemeByUrl(url, caption){
   if (!url) return;
   if (!/^https?:\/\//i.test(url)){ showToast('Ссылка должна начинаться с http:// или https://', true); return; }
 
-  let record = { id: uid('meme'), url: url, caption: caption || '' };
+  let record = { id: uid('meme'), url: url, caption: caption || '', approved: true };
   if (DB.ready){
     try {
       const saved = await DB.addMeme(url, caption);
@@ -1799,16 +1890,78 @@ async function addMemeByUrl(url, caption){
   showToast('Мем добавлен');
 }
 
+/* Предложка от кого угодно — уходит в очередь на модерацию, в общую
+   галерею попадёт только после того, как админ её одобрит. Работает
+   только когда подключена общая база: локальный режим — это только
+   ваш браузер, «предлагать» там некому. */
+async function submitMemeByUrl(url, caption, submittedBy){
+  url = String(url || '').trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)){ showToast('Ссылка должна начинаться с http:// или https://', true); return; }
+  if (!DB.ready){ showToast('Предложка мемов работает только при подключённой общей базе', true); return; }
+
+  try {
+    const saved = await DB.submitMeme(url, caption, submittedBy);
+    // Если предложение отправил сам админ — сразу покажем его в очереди
+    // модерации, не дожидаясь Realtime-события.
+    if (saved && State.isAdmin){
+      State.memesPending.unshift(saved);
+      renderMemeModeration();
+    }
+    showToast('Спасибо! Мем отправлен на модерацию.');
+  } catch(e){
+    showToast('Не удалось отправить: ' + e.message, true);
+  }
+}
+
 async function removeMeme(meme){
   if (DB.ready && meme.id && String(meme.id).indexOf('meme-') !== 0){
     try { await DB.deleteMeme(meme.id); }
     catch(e){ showToast('Не удалось удалить из базы: ' + e.message, true); return; }
   }
   State.memes = State.memes.filter(function(m){ return m !== meme; });
+  State.memesPending = State.memesPending.filter(function(m){ return m !== meme; });
   Store.save(LS_KEYS.memes, State.memes);
   renderShitpostGallery();
   renderAdminMemes();
+  renderMemeModeration();
   showToast('Мем удалён');
+}
+
+async function editMemeCaption(meme){
+  const next = window.prompt('Новая подпись:', meme.caption || '');
+  if (next === null) return; // отмена
+  const caption = next.trim();
+  if (caption === (meme.caption || '')) return;
+
+  if (DB.ready && meme.id && String(meme.id).indexOf('meme-') !== 0){
+    try { await DB.updateMeme(meme.id, { caption: caption }); }
+    catch(e){ showToast('Не удалось сохранить в базе: ' + e.message, true); return; }
+  }
+  meme.caption = caption;
+  Store.save(LS_KEYS.memes, State.memes);
+  renderShitpostGallery();
+  renderAdminMemes();
+  showToast('Подпись обновлена');
+}
+
+async function approveMeme(meme){
+  if (DB.ready && meme.id){
+    try { await DB.updateMeme(meme.id, { approved: true }); }
+    catch(e){ showToast('Не удалось одобрить: ' + e.message, true); return; }
+  }
+  State.memesPending = State.memesPending.filter(function(m){ return m !== meme; });
+  meme.approved = true;
+  State.memes.unshift(meme);
+  Store.save(LS_KEYS.memes, State.memes);
+  renderMemeModeration();
+  renderShitpostGallery();
+  renderAdminMemes();
+  showToast('Мем одобрен и опубликован');
+}
+
+function rejectMeme(meme){
+  confirmDelete('Отклонить и удалить это предложение?', function(){ removeMeme(meme); });
 }
 
 async function uploadMeme(file){
@@ -1833,14 +1986,24 @@ function promptMemeUrl(){
   addMemeByUrl(url, caption.trim());
 }
 
+function promptSuggestMeme(){
+  const url = window.prompt('Ссылка на картинку (https://…) — её увидит админ и, если одобрит, она появится в общей галерее:', '');
+  if (url === null) return;
+  const caption = window.prompt('Подпись (можно оставить пустой):', '') || '';
+  const submittedBy = window.prompt('Как подписать, от кого предложение? (можно оставить пустым)', '') || '';
+  submitMemeByUrl(url, caption.trim(), submittedBy.trim());
+}
+
 function initShitpost(){
   const refresh = $('shitpost-refresh');
   const addBtn = $('shitpost-add-btn');
+  const suggestBtn = $('shitpost-suggest-btn');
   const fileInput = $('shitpost-file-input');
 
   if (refresh) refresh.addEventListener('click', async function(){
     await loadMemes();
     renderShitpostGallery();
+    renderMemeModeration();
     showToast('Список мемов обновлён');
   });
 
@@ -1848,6 +2011,9 @@ function initShitpost(){
     if (DB.ready && fileInput) fileInput.click();
     else promptMemeUrl();
   });
+
+  if (suggestBtn) suggestBtn.addEventListener('click', promptSuggestMeme);
+
 
   if (fileInput) fileInput.addEventListener('change', function(e){
     uploadMeme(e.target.files[0]);
@@ -1860,29 +2026,86 @@ function initShitpost(){
    --------------------------------------------------------- */
 function renderAdminMemes(){
   const list = $('admin-meme-list');
+  if (list){
+    list.innerHTML = '';
+    if (!State.memes.length){
+      const li = document.createElement('li');
+      li.textContent = 'Список пуст';
+      list.appendChild(li);
+    } else {
+      State.memes.forEach(function(meme){
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.className = 'admin-meme-url';
+        span.textContent = meme.caption || meme.url;
+        span.title = meme.url;
+        li.appendChild(span);
+
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.textContent = '✎';
+        edit.title = 'Изменить подпись';
+        edit.addEventListener('click', function(){ editMemeCaption(meme); });
+        li.appendChild(edit);
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.textContent = '✕';
+        del.title = 'Удалить';
+        del.addEventListener('click', function(){
+          confirmDelete('Удалить этот мем?', function(){ removeMeme(meme); });
+        });
+        li.appendChild(del);
+        list.appendChild(li);
+      });
+    }
+  }
+  renderMemeModeration();
+}
+
+/* Очередь предложенных (не своих) мемов — видна только админу.
+   Одобрить → публикуется в общей галерее. Отклонить → просто удаляется. */
+function renderMemeModeration(){
+  const list = $('admin-meme-pending-list');
+  const badge = $('admin-meme-pending-count');
   if (!list) return;
   list.innerHTML = '';
-  if (!State.memes.length){
-    const li = document.createElement('li');
-    li.textContent = 'Список пуст';
-    list.appendChild(li);
+  if (badge) badge.textContent = State.memesPending.length ? String(State.memesPending.length) : '';
+
+  if (!State.memesPending.length){
+    list.innerHTML = '<li class="admin-period-empty">Предложений нет</li>';
     return;
   }
-  State.memes.forEach(function(meme){
+  State.memesPending.forEach(function(meme){
     const li = document.createElement('li');
-    const span = document.createElement('span');
-    span.className = 'admin-meme-url';
-    span.textContent = meme.caption || meme.url;
-    span.title = meme.url;
-    li.appendChild(span);
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.textContent = '✕';
-    del.title = 'Удалить';
-    del.addEventListener('click', function(){
-      confirmDelete('Удалить этот мем?', function(){ removeMeme(meme); });
-    });
-    li.appendChild(del);
+    li.className = 'admin-meme-pending-item';
+
+    const thumb = document.createElement('img');
+    thumb.src = meme.url; thumb.alt = ''; thumb.loading = 'lazy';
+    thumb.addEventListener('click', function(){ window.open(meme.url, '_blank', 'noopener'); });
+    li.appendChild(thumb);
+
+    const info = document.createElement('div');
+    info.className = 'admin-meme-pending-info';
+    info.innerHTML =
+      '<div class="admin-meme-pending-caption">' + escapeHtml(meme.caption || '(без подписи)') + '</div>' +
+      (meme.submitted_by ? '<div class="admin-meme-pending-by">от: ' + escapeHtml(meme.submitted_by) + '</div>' : '');
+    li.appendChild(info);
+
+    const actions = document.createElement('div');
+    actions.className = 'admin-meme-pending-actions';
+    const approveBtn = document.createElement('button');
+    approveBtn.type = 'button'; approveBtn.className = 'xp-tool-btn primary';
+    approveBtn.textContent = 'Одобрить';
+    approveBtn.addEventListener('click', function(){ approveMeme(meme); });
+    const rejectBtn = document.createElement('button');
+    rejectBtn.type = 'button'; rejectBtn.className = 'xp-tool-btn danger';
+    rejectBtn.textContent = 'Отклонить';
+    rejectBtn.addEventListener('click', function(){ rejectMeme(meme); });
+    actions.appendChild(approveBtn);
+    actions.appendChild(rejectBtn);
+    li.appendChild(actions);
+
     list.appendChild(li);
   });
 }
@@ -2444,12 +2667,13 @@ function initAdminPeriods(){
     if (!label || !start || !end){ showToast('Заполните название и обе даты', true); return; }
     if (end < start){ showToast('Дата конца раньше даты начала', true); return; }
 
-    const period = { label: label, color: color, start: start, end: end };
+    const period = { label: label, color: color, start: start, end: end, created_at: new Date().toISOString() };
     addBtn.disabled = true;
     if (DB.ready){
       try {
         const saved = await DB.addPeriod(period);
         period.id = saved.id;
+        period.created_at = saved.created_at || period.created_at;
         showToast('Период сохранён в общей базе');
       } catch(e){
         showToast('Сохранено только локально: ' + e.message, true);
@@ -2470,7 +2694,7 @@ function initAdminPeriods(){
   });
 }
 
-function setAdminMode(on){
+async function setAdminMode(on){
   State.isAdmin = on;
   const loginDiv = $('admin-login');
   const panelDiv = $('admin-panel');
@@ -2485,7 +2709,15 @@ function setAdminMode(on){
   document.body.classList.toggle('is-admin', on);
   renderScheduleWindow();
   renderShitpostGallery();
-  if (on){ renderAdminMemes(); initAttendanceLessonOptions(); loadAttendanceForSelection(); loadAttendanceSummary(); }
+  if (on){
+    // Перечитываем мемы уже с правами админа — иначе очередь модерации
+    // (видна только authenticated) останется пустой с прошлой, анонимной
+    // загрузки страницы.
+    await loadMemes();
+    renderShitpostGallery();
+    renderAdminMemes();
+    initAttendanceLessonOptions(); loadAttendanceForSelection(); loadAttendanceSummary();
+  }
   document.dispatchEvent(new CustomEvent('study-os:admin-mode-changed', { detail: { on: on } }));
 }
 
