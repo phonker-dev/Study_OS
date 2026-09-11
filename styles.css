@@ -548,13 +548,16 @@ input, select, textarea{
   width: 100%; height: auto; display: block; object-fit: cover;
 }
 .shitpost-gallery .meme-item .meme-actions{
-  display: flex; justify-content: flex-end; padding: .2rem .3rem;
+  display: flex; justify-content: flex-end; gap: .3rem; padding: .2rem .3rem;
   background: #eef2fb;
 }
 .shitpost-gallery .meme-item .meme-actions button{
-  background: transparent; border: none; color: #b52d20; font-size: .6rem;
+  background: transparent; border: none; font-size: .6rem; border-radius: .3rem; padding: .1rem .3rem;
 }
-.shitpost-gallery .meme-item .meme-actions button:hover{ background: #ffe0dd; }
+.shitpost-gallery .meme-item .meme-actions .meme-edit{ color: var(--xp-blue-mid); }
+.shitpost-gallery .meme-item .meme-actions .meme-edit:hover{ background: #d9f4f8; }
+.shitpost-gallery .meme-item .meme-actions .meme-delete{ color: #b52d20; }
+.shitpost-gallery .meme-item .meme-actions .meme-delete:hover{ background: #ffe0dd; }
 
 /* ---------- Админ-панель ---------- */
 .admin-login{ max-width: 18rem; margin: 0 auto; }
@@ -563,13 +566,36 @@ input, select, textarea{
 .admin-login input{ padding: .3rem; border: 1px solid #8fa6cc; border-radius: .2rem; }
 .admin-login button{ margin-top: .5rem; }
 .admin-section{ border-bottom: 1px solid #dde5f5; padding: .5rem 0; }
-.admin-section h4{ font-size: .65rem; margin: .2rem 0; }
+.admin-section h4{ font-size: .65rem; margin: .2rem 0; display: flex; align-items: center; gap: .3rem; }
 #admin-notes-container{ display: flex; flex-direction: column; gap: .3rem; }
 #admin-notes-container label{ font-size: .55rem; display: flex; align-items: center; gap: .3rem; }
 #admin-notes-container input[type="text"]{ flex: 1; padding: .2rem; border: 1px solid #8fa6cc; border-radius: .2rem; }
 #admin-meme-list{ list-style: none; padding: 0; }
-#admin-meme-list li{ display: flex; justify-content: space-between; align-items: center; padding: .2rem .3rem; border-bottom: 1px solid #dde5f5; font-size: .55rem; }
-#admin-meme-list li button{ background: none; border: none; color: #b52d20; font-size: .6rem; }
+#admin-meme-list li{ display: flex; justify-content: space-between; align-items: center; padding: .2rem .3rem; border-bottom: 1px solid #dde5f5; font-size: .55rem; gap: .3rem; }
+#admin-meme-list li button{ background: none; border: none; font-size: .6rem; border-radius: .3rem; padding: .1rem .3rem; }
+#admin-meme-list li button:first-of-type{ color: var(--xp-blue-mid); }
+#admin-meme-list li button:last-of-type{ color: #b52d20; }
+
+/* ---------- Очередь предложенных мемов (модерация) ---------- */
+.admin-pending-badge{
+  display: inline-block; min-width: 1.1rem; text-align: center;
+  background: linear-gradient(180deg, #ff8a75, #d6291a); color: #fff;
+  font-size: .5rem; font-weight: 700; border-radius: 1rem; padding: .05rem .35rem;
+}
+.admin-meme-pending-list{ list-style: none; margin: 0; padding: 0; }
+.admin-meme-pending-item{
+  display: flex; align-items: center; gap: .4rem;
+  padding: .3rem; border-bottom: 1px solid #eef2fa;
+}
+.admin-meme-pending-item img{
+  width: 2.6rem; height: 2.6rem; object-fit: cover; border-radius: .4rem;
+  border: 1px solid #ccd7ec; cursor: pointer; flex-shrink: 0;
+}
+.admin-meme-pending-info{ flex: 1; min-width: 0; }
+.admin-meme-pending-caption{ font-size: .55rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-meme-pending-by{ font-size: .48rem; color: #6b7d9c; }
+.admin-meme-pending-actions{ display: flex; flex-direction: column; gap: .2rem; flex-shrink: 0; }
+.admin-meme-pending-actions .xp-tool-btn{ font-size: .5rem; padding: .2rem .45rem; white-space: nowrap; }
 
 /* ---------- Модальное окно ---------- */
 .xp-modal-overlay{
@@ -833,6 +859,9 @@ input, select, textarea{
   .resize-handle{ display: none; } /* ручки ресайза бесполезны на тач-экране */
 
   .shitpost-gallery{ grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); }
+  .shitpost-gallery .meme-item .meme-actions button{ min-width: 2rem; min-height: 2rem; }
+  .admin-meme-pending-item img{ width: 3.2rem; height: 3.2rem; }
+  .admin-meme-pending-actions .xp-tool-btn{ min-height: 1.8rem; }
   .admin-login{ max-width: 100%; }
   .xp-modal{ width: calc(100vw - 2rem); }
   #activation-watermark{ font-size: .5rem; bottom: calc(3rem + env(safe-area-inset-bottom, 0px)); }
